@@ -17,15 +17,15 @@ pub fn build(b: *std.Build) void {
 
     const sim86_lib = b.addStaticLibrary(.{
         .name = "sim86",
-		.target = target,
-		.optimize = optimize,
-		.root_source_file = b.path("src/sim86.zig"),
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("src/sim86.zig"),
     });
 
-	sim86_lib.addIncludePath(b.path("vendor/computer_enhance/perfaware/sim86/shared"));
+    sim86_lib.addIncludePath(b.path("vendor/computer_enhance/perfaware/sim86/shared"));
     sim86_lib.addCSourceFile(.{ .file = b.path("vendor/computer_enhance/perfaware/sim86/sim86_lib.cpp"), .flags = &[_][]const u8{} });
     sim86_lib.linkLibCpp();
-    sim86_lib.installHeader(b.path("vendor/computer_enhance/perfaware/sim86/shared/sim86_shared.h"), "sim86_shared.h");	
+    sim86_lib.installHeader(b.path("vendor/computer_enhance/perfaware/sim86/shared/sim86_shared.h"), "sim86_shared.h");
 
     b.installArtifact(sim86_lib);
 
@@ -34,15 +34,14 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .root_source_file = b.path("src/main.zig"),
         .name = "decode86",
-		.target = target,
-		.optimize = optimize,
+        .target = target,
+        .optimize = optimize,
     });
-	exe.linkLibrary(sim86_lib);
+    exe.linkLibrary(sim86_lib);
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
-
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
