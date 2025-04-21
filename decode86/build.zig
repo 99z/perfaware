@@ -15,42 +15,34 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    // We will also create a module for our other entry point, 'main.zig'.
-    const exe_mod = b.createModule(.{
-        // `root_source_file` is the Zig "entry point" of the module. If a module
-        // only contains e.g. external object files, you can make this `null`.
-        // In this case the main source file is merely a path, however, in more
-        // complicated build scripts, this could be a generated file.
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+    const sim86_lib = b.addStaticLibrary(.{
+        .name = "sim86",
+		.target = target,
+		.optimize = optimize,
+		.root_source_file = b.path("src/sim86.zig"),
     });
 
-    // Now, we will create a static library based on the module we created above.
-    // This creates a `std.Build.Step.Compile`, which is the build step responsible
-    // for actually invoking the compiler.
-    const lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "decode86",
-        .root_module = exe_mod,
-    });
+	sim86_lib.addIncludePath(b.path("vendor/computer_enhance/perfaware/sim86/shared"));
+    sim86_lib.addCSourceFile(.{ .file = b.path("vendor/computer_enhance/perfaware/sim86/sim86_lib.cpp"), .flags = &[_][]const u8{} });
+    sim86_lib.linkLibCpp();
+    sim86_lib.installHeader(b.path("vendor/computer_enhance/perfaware/sim86/shared/sim86_shared.h"), "sim86_shared.h");	
 
-	lib.addIncludePath(b.path("vendor/computer_enhance/perfaware/sim86/shared"));
-    lib.addCSourceFile(.{ .file = b.path("vendor/computer_enhance/perfaware/sim86/sim86_lib.cpp"), .flags = &[_][]const u8{} });
-    lib.linkLibCpp();
-    lib.installHeader(b.path("vendor/computer_enhance/perfaware/sim86/shared/sim86_shared.h"), "sim86_shared.h");	
-
-    // This declares intent for the library to be installed into the standard
-    // location when the user invokes the "install" step (the default step when
-    // running `zig build`).
-    b.installArtifact(lib);
+    b.installArtifact(sim86_lib);
 
     // This creates another `std.Build.Step.Compile`, but this one builds an executable
     // rather than a static library.
     const exe = b.addExecutable(.{
+        .root_source_file = b.path("src/main.zig"),
         .name = "decode86",
-        .root_module = exe_mod,
+		.target = target,
+		.optimize = optimize,
     });
+	exe.linkLibrary(sim86_lib);
+
+    // This declares intent for the library to be installed into the standard
+    // location when the user invokes the "install" step (the default step when
+    // running `zig build`).
+
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -79,16 +71,4 @@ pub fn build(b: *std.Build) void {
     // This will evaluate the `run` step rather than the default, which is "install".
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
-
-    const exe_unit_tests = b.addTest(.{
-        .root_module = exe_mod,
-    });
-
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
-
-    // Similar to creating the run step earlier, this exposes a `test` step to
-    // the `zig build --help` menu, providing a way for the user to request
-    // running the unit tests.
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_exe_unit_tests.step);
 }
