@@ -18,10 +18,18 @@ pub fn main() !void {
 		_ = gpa.deinit();
 	}
 
-    const stat = try file.stat();
-    const buffer = try file.readToEndAlloc(allocator, stat.size);
-    defer allocator.free(buffer);
+	const stat = try file.stat();
+	const buffer = try file.readToEndAlloc(allocator, stat.size);
+	defer allocator.free(buffer);
 
-	const decoded = sim86.decode8086Instruction(buffer);
-	std.debug.print("{any}\n", .{decoded});
+	var offset: usize = 0;
+	while (offset < buffer.len) {
+		const decoded = try sim86.decode8086Instruction(buffer[offset..buffer.len]);
+
+		if (decoded.Op == sim86.OperationType.Op_mov) {
+			// TODO Implement mov logic
+		}
+
+		offset += decoded.Size;
+	}
 }
