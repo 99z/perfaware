@@ -16,36 +16,62 @@ fn initRegisters(allocator: std.mem.Allocator) !Registers {
     return regs;
 }
 
-fn printRegisters(regs: *Registers) !void {
-	std.debug.print("Final registers:\n", .{});
-	std.debug.print("\tax: {?x}\n", .{regs.get("ax")});
-	std.debug.print("\tbx: {?x}\n", .{regs.get("bx")});
-	std.debug.print("\tcx: {?x}\n", .{regs.get("cx")});
-	std.debug.print("\tdx: {?x}\n", .{regs.get("dx")});
-	std.debug.print("\tsp: {?x}\n", .{regs.get("sp")});
-	std.debug.print("\tbp: {?x}\n", .{regs.get("bp")});
-	std.debug.print("\tsi: {?x}\n", .{regs.get("si")});
-	std.debug.print("\tdi: {?x}\n", .{regs.get("di")});
+fn printRegisters(w: anytype, regs: *Registers) !void {
+	try w.print("Final registers:\n", .{});
+	try w.print("\tax: {?x}\n", .{regs.get("ax")});
+	try w.print("\tbx: {?x}\n", .{regs.get("bx")});
+	try w.print("\tcx: {?x}\n", .{regs.get("cx")});
+	try w.print("\tdx: {?x}\n", .{regs.get("dx")});
+	try w.print("\tsp: {?x}\n", .{regs.get("sp")});
+	try w.print("\tbp: {?x}\n", .{regs.get("bp")});
+	try w.print("\tsi: {?x}\n", .{regs.get("si")});
+	try w.print("\tdi: {?x}\n", .{regs.get("di")});
 }
 
-fn doMOV(regs: *Registers, instr: sim86.Instruction) !void {
+fn doMOV(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
 	var dest = instr.Operands[0];
-	const src = instr.Operands[1];
+	var src = instr.Operands[1];
 	const reg_name = sim86.registerNameFromOperand(&dest.data.Register);
 
 	const cur_value = regs.get(reg_name);
-	std.debug.print("{s}:\t{?x} -> {?x}\n", .{reg_name, cur_value, src.data.Immediate.Value});
 
-	try regs.put(reg_name, src.data.Immediate.Value);
+	// Nonzero when reg->reg mov, otherwise 0
+	// ...at least, I think that's the best way to tell :)
+	if (src.data.Register.Count != 0) {
+		const src_reg_name = sim86.registerNameFromOperand(&src.data.Register);
+		try w.print("{s}:\t{?x} -> {?s}\n", .{reg_name, cur_value, src_reg_name});
+
+		const src_reg_val = regs.get(src_reg_name) orelse return error.SrcRegDoesNotExist;
+
+		try regs.put(reg_name, src_reg_val);
+	} else {
+		try w.print("{s}:\t{?x} -> {?x}\n", .{reg_name, cur_value, src.data.Immediate.Value});
+
+		try regs.put(reg_name, src.data.Immediate.Value);
+	}
+
 }
 
 pub fn main() !void {
-    std.debug.print("sim86 reference version: {}\n", .{sim86.getVersion()});
+	// I had to do a bit of reading to figure out the "correct"
+	// way of writing to stdout efficiently:
+	// https://github.com/ziglang/zig/issues/21566
+	// https://zig.news/kristoff/how-to-add-buffering-to-a-writer-reader-in-zig-7jd
+	//
+	// This comment in particular was enlightening:
+	// > That buffering is done by libc not the OS. So no buffering if you write
+	// > directly to stdout's OS file descriptor. In C, you'll observe the buffered IO
+	// > if you use printf(3)/fprintf(3)/fwrite(3), but not if you used write(2) directly.
+	const stdout = std.io.getStdOut();
+	var bw = std.io.bufferedWriter(stdout.writer());
+	var w = bw.writer();
+		
+    try w.print("sim86 reference version: {}\n", .{sim86.getVersion()});
 
     var args = std.process.args();
     _ = args.next();
 
-    const filename = args.next() orelse return std.debug.print("usage: decode86 <BIN_FILENAME>\n", .{});
+    const filename = args.next() orelse return try w.print("usage: decode86 <BIN_FILENAME>\n", .{});
     const file = try std.fs.cwd().openFile(filename, .{});
     defer file.close();
 
@@ -67,12 +93,14 @@ pub fn main() !void {
 		const decoded = try sim86.decode8086Instruction(buffer[offset..buffer.len]);
 
 		if (decoded.Op == sim86.OperationType.Op_mov) {
-			try doMOV(&regs, decoded);
+			try doMOV(w, &regs, decoded);
 		}
 
 		offset += decoded.Size;
 	}
 	
-	std.debug.print("\n", .{});
-	try printRegisters(&regs);
+	try w.print("\n", .{});
+	try printRegisters(w, &regs);
+
+	try bw.flush();
 }
