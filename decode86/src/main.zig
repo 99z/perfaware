@@ -35,166 +35,111 @@ fn printRegisters(w: anytype, regs: *Registers) !void {
 fn doMOV(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     var dest = instr.Operands[0];
     var src = instr.Operands[1];
-    const reg_name = sim86.registerNameFromOperand(&dest.data.Register);
 
-    const cur_value = regs.get(reg_name);
+    const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
+    const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
 
-    // Nonzero when reg->reg mov, otherwise 0
-    // ...at least, I think that's the best way to tell :)
-    if (src.data.Register.Count != 0) {
-        const src_reg_name = sim86.registerNameFromOperand(&src.data.Register);
-        try w.print("mov {s}:\t{?x} -> {?s}\n", .{ reg_name, cur_value, src_reg_name });
+    const src_reg_val = if (src.data.Register.Count != 0)
+        regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
+    else
+        src.data.Immediate.Value;
 
-        const src_reg_val = regs.get(src_reg_name) orelse return error.SrcRegDoesNotExist;
+    try w.print("mov {s}:\t{?x} -> {?x}\n", .{ dest_reg_name, dest_reg_val, src_reg_val });
 
-        try regs.put(reg_name, src_reg_val);
-    } else {
-        try w.print("mov {s}:\t{?x} -> {?x}\n", .{ reg_name, cur_value, src.data.Immediate.Value });
-
-        try regs.put(reg_name, src.data.Immediate.Value);
-    }
+    try regs.put(dest_reg_name, src_reg_val);
 }
 
 fn doSUB(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     var dest = instr.Operands[0];
     var src = instr.Operands[1];
-    const reg_name = sim86.registerNameFromOperand(&dest.data.Register);
 
-    const cur_value = regs.get(reg_name) orelse return error.DestRegDoesNotExist;
+    const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
+    const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
+
+    const src_reg_val = if (src.data.Register.Count != 0)
+        regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
+    else
+        src.data.Immediate.Value;
+
     const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
 
-    if (src.data.Register.Count != 0) {
-        const src_reg_name = sim86.registerNameFromOperand(&src.data.Register);
-        const src_reg_val = regs.get(src_reg_name) orelse return error.SrcRegDoesNotExist;
+    const result = src_reg_val - dest_reg_val;
 
-	const new_val = src_reg_val - cur_value;
+    try w.print("sub {s}:\t{?x} -> {?x}", .{ dest_reg_name, dest_reg_val, result });
 
-        try w.print("sub {s}:\t{?x} -> {?x}", .{ reg_name, cur_value, new_val });
-
-	// set flags
-	if (new_val < 0) {
-	    try regs.put("flags", flags | 0x0080);
-	    try w.print("\tflags: -> S", .{});
-	} else if (new_val == 0) {
-	    try regs.put("flags", flags | 0x0070);
-	    try w.print("Z", .{});
-	}
-
-        try regs.put(reg_name, new_val);
-    } else {
-	const dest_reg_val = regs.get(reg_name) orelse return error.DestRegDoesNotExist;
-	const new_val = dest_reg_val - src.data.Immediate.Value;
-
-        try w.print("sub {s}:\t{?x} -> {?x}", .{ reg_name, cur_value, new_val });
-
-	if (new_val < 0 or new_val == 0) {
-	    try w.print("\tflags: ", .{});
-	}
-
-	if (new_val < 0) {
-	    // Set SF
-	    try regs.put("flags", flags | 0x0080);
-	    try w.print("-> S", .{});
-	} else {
-	    // Unset SF
-	    try regs.put("flags", flags & 0xFF7F);
-	    try w.print("S", .{});
-	}
-
-	if (new_val == 0) {
-	    // Set ZF
-	    try regs.put("flags", flags | 0x0070);
-	    try w.print("Z", .{});
-	} else {
-	    // Unset ZF
-	    try regs.put("flags", flags | 0xFF6F);
-	    try w.print("Z ->", .{});
-	}
-
-        try regs.put(reg_name, new_val);
+    // set flags
+    if (result < 0) {
+        try regs.put("flags", flags | 0x0080);
+        try w.print("\tflags: -> S", .{});
+    } else if (result == 0) {
+        try regs.put("flags", flags | 0x0070);
+        try w.print("Z", .{});
     }
 
+    try regs.put(dest_reg_name, result);
     try w.print("\n", .{});
 }
-
 
 fn doADD(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     var dest = instr.Operands[0];
     var src = instr.Operands[1];
-    const reg_name = sim86.registerNameFromOperand(&dest.data.Register);
 
-    const cur_value = regs.get(reg_name);
+    const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
+    const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
 
-    if (src.data.Register.Count != 0) {
-        const src_reg_name = sim86.registerNameFromOperand(&src.data.Register);
+    const src_reg_val = if (src.data.Register.Count != 0)
+        regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
+    else
+        src.data.Immediate.Value;
 
-	const dest_reg_val = regs.get(reg_name) orelse return error.DestRegDoesNotExist;
-        const src_reg_val = regs.get(src_reg_name) orelse return error.SrcRegDoesNotExist;
-	const new_val = src_reg_val + dest_reg_val;
+    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
 
-        try w.print("add {s}:\t{?x} -> {?x}", .{ reg_name, cur_value, new_val });
+    const result = src_reg_val + dest_reg_val;
 
-	// If result is negative, set SF in FLAGS
-	const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
-	if (new_val < 0) {
-	    try regs.put("flags", flags | 0x0080);
-	    try w.print("\tflags: -> S", .{});
-	} else if (new_val == 0) {
-	    try regs.put("flags", flags | 0x0070);
-	    try w.print("Z", .{});
-	}
+    try w.print("add {s}:\t{?x} -> {?x}", .{ dest_reg_name, dest_reg_val, result });
 
-	try w.print("\n", .{});
-        try regs.put(reg_name, new_val);
-    } else {
-	const dest_reg_val = regs.get(reg_name) orelse return error.DestRegDoesNotExist;
-	const new_val = dest_reg_val + src.data.Immediate.Value;
-
-        try w.print("add {s}:\t{?x} -> {?x}\n", .{ reg_name, cur_value, new_val });
-
-        try regs.put(reg_name, new_val);
+    // set flags
+    if (result < 0) {
+        try regs.put("flags", flags | 0x0080);
+        try w.print("\tflags: -> S", .{});
+    } else if (result == 0) {
+        try regs.put("flags", flags | 0x0070);
+        try w.print("Z", .{});
     }
+
+    try regs.put(dest_reg_name, result);
+    try w.print("\n", .{});
 }
-
-
 
 fn doCMP(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     var dest = instr.Operands[0];
     var src = instr.Operands[1];
-    const reg_name = sim86.registerNameFromOperand(&dest.data.Register);
 
-    const cur_value = regs.get(reg_name) orelse return error.DestRegDoesNotExist;
+    const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
+    const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
 
-    if (src.data.Register.Count != 0) {
-        const src_reg_name = sim86.registerNameFromOperand(&src.data.Register);
-        const src_reg_val = regs.get(src_reg_name) orelse return error.SrcRegDoesNotExist;
+    const src_reg_val = if (src.data.Register.Count != 0)
+        regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
+    else
+        src.data.Immediate.Value;
 
-	const new_val = src_reg_val - cur_value;
+    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
 
-        try w.print("cmp {s}, {s}", .{ reg_name, src_reg_name });
+    const result = src_reg_val - dest_reg_val;
 
-	// If result is negative, set SF in FLAGS
-	if (new_val < 0) {
-	    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
-	    try regs.put("flags", flags | 0x0080);
-	    try w.print("\tflags: -> S", .{});
-	}
+    try w.print("cmp {s}:\t{?x} -> {?x}", .{ dest_reg_name, dest_reg_val, result });
 
-	try w.print("\n", .{});
-    } else {
-	const dest_reg_val = regs.get(reg_name) orelse return error.DestRegDoesNotExist;
-	const new_val = dest_reg_val - src.data.Immediate.Value;
-
-	if (new_val < 0) {
-	    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
-	    try regs.put("flags", flags | 0x0080);
-	    try w.print("\tflags: -> S", .{});
-	}
-
-        try w.print("cmp {s}, {x}", .{ reg_name, src.data.Immediate.Value });
+    // set flags
+    if (result < 0) {
+        try regs.put("flags", flags | 0x0080);
+        try w.print("\tflags: -> S", .{});
+    } else if (result == 0) {
+        try regs.put("flags", flags | 0x0070);
+        try w.print("Z", .{});
     }
-}
 
+    try w.print("\n", .{});
+}
 
 pub fn main() !void {
     // I had to do a bit of reading to figure out the "correct"
@@ -236,17 +181,17 @@ pub fn main() !void {
     while (offset < buffer.len) {
         const decoded = try sim86.decode8086Instruction(buffer[offset..buffer.len]);
 
-	switch (decoded.Op) {
-	    .Op_mov => try doMOV(w, &regs, decoded),
-	    .Op_sub => try doSUB(w, &regs, decoded),
-	    .Op_cmp => try doCMP(w, &regs, decoded),
-	    .Op_add => try doADD(w, &regs, decoded),
-	    else => {}
-	}
+        switch (decoded.Op) {
+            .Op_mov => try doMOV(w, &regs, decoded),
+            .Op_sub => try doSUB(w, &regs, decoded),
+            .Op_cmp => try doCMP(w, &regs, decoded),
+            .Op_add => try doADD(w, &regs, decoded),
+            else => {},
+        }
 
         offset += decoded.Size;
     }
-	
+
     try w.print("\n", .{});
     try printRegisters(w, &regs);
 
