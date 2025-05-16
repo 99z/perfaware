@@ -106,7 +106,7 @@ fn doAddSubCmp(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     const src_reg_val = @as(u16, @intCast(src_reg_val_full)); 
 
     const result = switch (instr.Op) {
-        .Op_sub, .Op_cmp => dest_reg_val - src_reg_val,
+        .Op_sub, .Op_cmp => @subWithOverflow(dest_reg_val, src_reg_val)[0],
         .Op_add => src_reg_val + dest_reg_val,
         else => return error.SimNotImplemented,
     };
@@ -116,6 +116,24 @@ fn doAddSubCmp(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
 
     if (instr.Op != .Op_cmp) try regs.put(dest_reg_name, result);
     try w.print("\n", .{});
+}
+
+fn doJne(w: anytype, regs: *Registers, instr: sim86.Instruction, offset: usize) !usize {
+    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
+    const zf = (flags >> 6) & 1;
+    const jne_value = instr.Operands[0].data.Immediate.Value;
+    try w.print("{any} {?d}\n", .{ instr.Op, jne_value });
+
+    var new_offset = offset;
+    if (zf == 0) {
+	new_offset = if (jne_value < 0)
+	    // Subtract the absolute value of b
+	    offset - @as(usize, @intCast(-jne_value))
+	else
+	    offset + @as(usize, @intCast(jne_value));
+    }
+
+    return new_offset;
 }
 
 pub fn main() !void {
@@ -158,10 +176,16 @@ pub fn main() !void {
     while (offset < buffer.len) {
         const decoded = try sim86.decode8086Instruction(buffer[offset..buffer.len]);
 
+	const ip = regs.get("ip") orelse return error.IpRegDoesNotExist;
+	try regs.put("ip", ip + @as(u16, @intCast(decoded.Size)));
+
         switch (decoded.Op) {
             .Op_mov => try doMov(w, &regs, decoded),
             .Op_add, .Op_cmp, .Op_sub => try doAddSubCmp(w, &regs, decoded),
-            else => {},
+	    .Op_jne => offset = try doJne(w, &regs, decoded, offset),
+	    else => {
+		try w.print("unhandled: {any}\n", .{decoded.Op});
+	    },
         }
 
         offset += decoded.Size;
