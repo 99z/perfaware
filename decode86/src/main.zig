@@ -1,7 +1,7 @@
 const std = @import("std");
 const sim86 = @import("sim86.zig");
 
-const Registers = std.StringHashMap(i32);
+const Registers = std.StringHashMap(u16);
 
 fn initRegisters(allocator: std.mem.Allocator) !Registers {
     var regs = Registers.init(allocator);
@@ -29,115 +29,92 @@ fn printRegisters(w: anytype, regs: *Registers) !void {
     try w.print("\tsi: {?x}\n", .{regs.get("si")});
     try w.print("\tdi: {?x}\n", .{regs.get("di")});
     try w.print("\tip: {?x}\n", .{regs.get("ip")});
-    try w.print("\tflags: {?x}\n", .{regs.get("flags")});
+
+    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
+    const sf = (flags >> 7) & 1;
+    const zf = (flags >> 6) & 1;
+
+    try w.print("\tflags: {s}{s}\n", .{
+	if (sf == 1) "S" else "",
+	if (zf == 1) "Z" else "",
+    });
 }
 
-fn doMOV(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
+fn setFlags(w: anytype, result: u16, regs: *Registers) !void {
+    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
+    
+    const sf = (flags >> 7) & 1;
+    const zf = (flags >> 6) & 1;
+
+    const new_sf = (result >> 15) & 1;
+    const new_zf: u16 = @intFromBool(result == 0);
+
+    var updated_flags = flags;
+    var print_sf = false;
+    var print_zf = false;
+
+    if (sf != new_sf) {
+        updated_flags = (updated_flags & 0xFF7F) | (new_sf << 7);
+        print_sf = true;
+    }
+
+    if (zf != new_zf) {
+        updated_flags = (updated_flags & 0xFFBF) | (new_zf << 6);
+        print_zf = true;
+    }
+
+    if (print_sf or print_zf) {
+        try regs.put("flags", updated_flags);
+	try w.print(" flags: {s}{s} -> {s}{s}", .{
+	    if (sf == 1) "S" else "",
+	    if (zf == 1) "Z" else "",
+	    if (new_sf == 1) "S" else "",
+	    if (new_zf == 1) "Z" else ""
+	});
+    }
+}
+
+fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     var dest = instr.Operands[0];
     var src = instr.Operands[1];
 
     const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
     const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
 
-    const src_reg_val = if (src.data.Register.Count != 0)
+    const src_reg_val_full = if (src.data.Register.Count != 0)
         regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
     else
         src.data.Immediate.Value;
+    const src_reg_val = @as(u16, @intCast(src_reg_val_full)); 
 
-    try w.print("mov {s}:\t{?x} -> {?x}\n", .{ dest_reg_name, dest_reg_val, src_reg_val });
+    try w.print("{any} {s}:\t{?x} -> {?x}\n", .{ instr.Op, dest_reg_name, dest_reg_val, src_reg_val });
 
     try regs.put(dest_reg_name, src_reg_val);
 }
 
-fn doSUB(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
+fn doAddSubCmp(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     var dest = instr.Operands[0];
     var src = instr.Operands[1];
 
     const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
     const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
 
-    const src_reg_val = if (src.data.Register.Count != 0)
+    const src_reg_val_full = if (src.data.Register.Count != 0)
         regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
     else
         src.data.Immediate.Value;
+    const src_reg_val = @as(u16, @intCast(src_reg_val_full)); 
 
-    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
+    const result = switch (instr.Op) {
+        .Op_sub, .Op_cmp => dest_reg_val - src_reg_val,
+        .Op_add => src_reg_val + dest_reg_val,
+        else => return error.SimNotImplemented,
+    };
 
-    const result = src_reg_val - dest_reg_val;
+    try w.print("{any} {s}:\t{?x} -> {?x}", .{ instr.Op, dest_reg_name, dest_reg_val, result });
+    try setFlags(w, result, regs);
 
-    try w.print("sub {s}:\t{?x} -> {?x}", .{ dest_reg_name, dest_reg_val, result });
-
-    // set flags
-    if (result < 0) {
-        try regs.put("flags", flags | 0x0080);
-        try w.print("\tflags: -> S", .{});
-    } else if (result == 0) {
-        try regs.put("flags", flags | 0x0070);
-        try w.print("Z", .{});
-    }
-
-    try regs.put(dest_reg_name, result);
-    try w.print("\n", .{});
-}
-
-fn doADD(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
-    var dest = instr.Operands[0];
-    var src = instr.Operands[1];
-
-    const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
-    const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
-
-    const src_reg_val = if (src.data.Register.Count != 0)
-        regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
-    else
-        src.data.Immediate.Value;
-
-    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
-
-    const result = src_reg_val + dest_reg_val;
-
-    try w.print("add {s}:\t{?x} -> {?x}", .{ dest_reg_name, dest_reg_val, result });
-
-    // set flags
-    if (result < 0) {
-        try regs.put("flags", flags | 0x0080);
-        try w.print("\tflags: -> S", .{});
-    } else if (result == 0) {
-        try regs.put("flags", flags | 0x0070);
-        try w.print("Z", .{});
-    }
-
-    try regs.put(dest_reg_name, result);
-    try w.print("\n", .{});
-}
-
-fn doCMP(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
-    var dest = instr.Operands[0];
-    var src = instr.Operands[1];
-
-    const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
-    const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
-
-    const src_reg_val = if (src.data.Register.Count != 0)
-        regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
-    else
-        src.data.Immediate.Value;
-
-    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
-
-    const result = src_reg_val - dest_reg_val;
-
-    try w.print("cmp {s}:\t{?x} -> {?x}", .{ dest_reg_name, dest_reg_val, result });
-
-    // set flags
-    if (result < 0) {
-        try regs.put("flags", flags | 0x0080);
-        try w.print("\tflags: -> S", .{});
-    } else if (result == 0) {
-        try regs.put("flags", flags | 0x0070);
-        try w.print("Z", .{});
-    }
-
+    if (instr.Op != .Op_cmp) try regs.put(dest_reg_name, result);
     try w.print("\n", .{});
 }
 
@@ -182,10 +159,8 @@ pub fn main() !void {
         const decoded = try sim86.decode8086Instruction(buffer[offset..buffer.len]);
 
         switch (decoded.Op) {
-            .Op_mov => try doMOV(w, &regs, decoded),
-            .Op_sub => try doSUB(w, &regs, decoded),
-            .Op_cmp => try doCMP(w, &regs, decoded),
-            .Op_add => try doADD(w, &regs, decoded),
+            .Op_mov => try doMov(w, &regs, decoded),
+            .Op_add, .Op_cmp, .Op_sub => try doAddSubCmp(w, &regs, decoded),
             else => {},
         }
 
