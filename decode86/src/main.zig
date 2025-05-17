@@ -35,14 +35,14 @@ fn printRegisters(w: anytype, regs: *Registers) !void {
     const zf = (flags >> 6) & 1;
 
     try w.print("\tflags: {s}{s}\n", .{
-	if (sf == 1) "S" else "",
-	if (zf == 1) "Z" else "",
+        if (sf == 1) "S" else "",
+        if (zf == 1) "Z" else "",
     });
 }
 
 fn setFlags(w: anytype, result: u16, regs: *Registers) !void {
     const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
-    
+
     const sf = (flags >> 7) & 1;
     const zf = (flags >> 6) & 1;
 
@@ -65,12 +65,7 @@ fn setFlags(w: anytype, result: u16, regs: *Registers) !void {
 
     if (print_sf or print_zf) {
         try regs.put("flags", updated_flags);
-	try w.print(" flags: {s}{s} -> {s}{s}", .{
-	    if (sf == 1) "S" else "",
-	    if (zf == 1) "Z" else "",
-	    if (new_sf == 1) "S" else "",
-	    if (new_zf == 1) "Z" else ""
-	});
+        try w.print(" flags: {s}{s} -> {s}{s}", .{ if (sf == 1) "S" else "", if (zf == 1) "Z" else "", if (new_sf == 1) "S" else "", if (new_zf == 1) "Z" else "" });
     }
 }
 
@@ -85,7 +80,7 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
         regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
     else
         src.data.Immediate.Value;
-    const src_reg_val = @as(u16, @intCast(src_reg_val_full)); 
+    const src_reg_val = @as(u16, @intCast(src_reg_val_full));
 
     try w.print("{any} {s}:\t{?x} -> {?x}\n", .{ instr.Op, dest_reg_name, dest_reg_val, src_reg_val });
 
@@ -103,7 +98,7 @@ fn doAddSubCmp(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
         regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
     else
         src.data.Immediate.Value;
-    const src_reg_val = @as(u16, @intCast(src_reg_val_full)); 
+    const src_reg_val = @as(u16, @intCast(src_reg_val_full));
 
     const result = switch (instr.Op) {
         .Op_sub, .Op_cmp => @subWithOverflow(dest_reg_val, src_reg_val)[0],
@@ -126,11 +121,11 @@ fn doJne(w: anytype, regs: *Registers, instr: sim86.Instruction, offset: usize) 
 
     var new_offset = offset;
     if (zf == 0) {
-	new_offset = if (jne_value < 0)
-	    // Subtract the absolute value of b
-	    offset - @as(usize, @intCast(-jne_value))
-	else
-	    offset + @as(usize, @intCast(jne_value));
+        new_offset = if (jne_value < 0)
+            // Subtract the absolute value of b
+            offset - @as(usize, @intCast(-jne_value))
+        else
+            offset + @as(usize, @intCast(jne_value));
     }
 
     return new_offset;
@@ -176,16 +171,16 @@ pub fn main() !void {
     while (offset < buffer.len) {
         const decoded = try sim86.decode8086Instruction(buffer[offset..buffer.len]);
 
-	const ip = regs.get("ip") orelse return error.IpRegDoesNotExist;
-	try regs.put("ip", ip + @as(u16, @intCast(decoded.Size)));
+        const ip = regs.get("ip") orelse return error.IpRegDoesNotExist;
+        try regs.put("ip", ip + @as(u16, @intCast(decoded.Size)));
 
         switch (decoded.Op) {
             .Op_mov => try doMov(w, &regs, decoded),
             .Op_add, .Op_cmp, .Op_sub => try doAddSubCmp(w, &regs, decoded),
-	    .Op_jne => offset = try doJne(w, &regs, decoded, offset),
-	    else => {
-		try w.print("unhandled: {any}\n", .{decoded.Op});
-	    },
+            .Op_jne => offset = try doJne(w, &regs, decoded, offset),
+            else => {
+                try w.print("unhandled: {any}\n", .{decoded.Op});
+            },
         }
 
         offset += decoded.Size;
