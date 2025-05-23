@@ -76,50 +76,50 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
 
     // Store
     if (dest.Type == .OperandMemory) {
-	const dest_address_reg1 = sim86.registerNameFromOperand(&dest.data.Address.Terms[0].Register);
-	const dest_address_reg_val1 = regs.get(dest_address_reg1) orelse 0;
+        const dest_address_reg1 = sim86.registerNameFromOperand(&dest.data.Address.Terms[0].Register);
+        const dest_address_reg_val1 = regs.get(dest_address_reg1) orelse 0;
 
-	const dest_address_reg2 = sim86.registerNameFromOperand(&dest.data.Address.Terms[1].Register);
-	const dest_address_reg_val2 = regs.get(dest_address_reg2) orelse 0;
+        const dest_address_reg2 = sim86.registerNameFromOperand(&dest.data.Address.Terms[1].Register);
+        const dest_address_reg_val2 = regs.get(dest_address_reg2) orelse 0;
 
-	const disp_imm = @as(u16, @intCast(dest.data.Address.Displacement));
-	const disp_full = disp_imm + dest_address_reg_val1 + dest_address_reg_val2;
+        const disp_imm = @as(u16, @intCast(dest.data.Address.Displacement));
+        const disp_full = disp_imm + dest_address_reg_val1 + dest_address_reg_val2;
 
-	var src_val = if (src.data.Register.Count != 0)
-	    regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
-	else
-	    src.data.Immediate.Value;
-	src_val = @as(u16, @intCast(src_val));
+        var src_val = if (src.data.Register.Count != 0)
+            regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
+        else
+            src.data.Immediate.Value;
+        src_val = @as(u16, @intCast(src_val));
 
-	try w.print("{any} mem[{d}] -> {d}\n", .{instr.Op, disp_full, src_val});
-	Memory[disp_full] = @intCast(src_val & 0xFF); // Low byte
-	Memory[disp_full + 1] = @intCast((src_val >> 8) & 0xFF); // High byte
+        try w.print("{any} mem[{d}] -> {d}\n", .{ instr.Op, disp_full, src_val });
+        Memory[disp_full] = @intCast(src_val & 0xFF); // Low byte
+        Memory[disp_full + 1] = @intCast((src_val >> 8) & 0xFF); // High byte
 
-	return;
+        return;
     }
 
     // Load
     if (src.Type == .OperandMemory) {
-	const src_address_reg1 = sim86.registerNameFromOperand(&src.data.Address.Terms[0].Register);
-	const src_address_reg_val1 = regs.get(src_address_reg1) orelse 0;
+        const src_address_reg1 = sim86.registerNameFromOperand(&src.data.Address.Terms[0].Register);
+        const src_address_reg_val1 = regs.get(src_address_reg1) orelse 0;
 
-	const src_address_reg2 = sim86.registerNameFromOperand(&src.data.Address.Terms[1].Register);
-	const src_address_reg_val2 = regs.get(src_address_reg2) orelse 0;
+        const src_address_reg2 = sim86.registerNameFromOperand(&src.data.Address.Terms[1].Register);
+        const src_address_reg_val2 = regs.get(src_address_reg2) orelse 0;
 
-	const disp_imm = @as(u16, @intCast(src.data.Address.Displacement));
-	const disp_full = disp_imm + src_address_reg_val1 + src_address_reg_val2;
+        const disp_imm = @as(u16, @intCast(src.data.Address.Displacement));
+        const disp_full = disp_imm + src_address_reg_val1 + src_address_reg_val2;
 
-	const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
+        const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
 
-	const low = Memory[disp_full];
-	const high = Memory[disp_full + 1];
-	const val = low | (@as(u16, high) << 8);
+        const low = Memory[disp_full];
+        const high = Memory[disp_full + 1];
+        const val = low | (@as(u16, high) << 8);
 
-	try w.print("{any} {s} -> mem[{d}] ({d})\n", .{instr.Op, dest_reg_name, disp_full, val});
+        try w.print("{any} {s} -> mem[{d}] ({d})\n", .{ instr.Op, dest_reg_name, disp_full, val });
 
-	try regs.put(dest_reg_name, val);
+        try regs.put(dest_reg_name, val);
 
-	return;
+        return;
     }
 
     const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
@@ -155,7 +155,7 @@ fn doAddSubCmp(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
         else => return error.SimNotImplemented,
     };
 
-    try w.print("{any} {s}:\t{?x} -> {?x}", .{ instr.Op, dest_reg_name, dest_reg_val, result });
+    try w.print("{any} {s}:\t{?d} -> {?d}", .{ instr.Op, dest_reg_name, dest_reg_val, result });
     try setFlags(w, result, regs);
 
     if (instr.Op != .Op_cmp) try regs.put(dest_reg_name, result);
@@ -222,7 +222,7 @@ pub fn main() !void {
         const decoded = try sim86.decode8086Instruction(buffer[offset..buffer.len]);
 
         const ip = regs.get("ip") orelse return error.IpRegDoesNotExist;
-        try regs.put("ip", ip + @as(u16, @intCast(decoded.Size)));
+        try regs.put("ip", @addWithOverflow(ip, @as(u16, @intCast(decoded.Size)))[0]);
 
         switch (decoded.Op) {
             .Op_mov => try doMov(w, &regs, decoded),
