@@ -2,6 +2,7 @@ const std = @import("std");
 const sim86 = @import("sim86.zig");
 
 const Registers = std.StringHashMap(u16);
+var Memory = std.mem.zeroes([1024 * 1024]u8);
 
 fn initRegisters(allocator: std.mem.Allocator) !Registers {
     var regs = Registers.init(allocator);
@@ -73,6 +74,39 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     var dest = instr.Operands[0];
     var src = instr.Operands[1];
 
+    // Store
+    if (dest.Type == .OperandMemory) {
+	const imm = @as(u16, @intCast(src.data.Immediate.Value));
+
+	const dest_reg_disp = sim86.registerNameFromOperand(&dest.data.Address.Terms[0].Register);
+	const dest_reg_val = regs.get(dest_reg_disp) orelse 0;
+
+	const disp = @as(u16, @intCast(dest.data.Address.Displacement)) + dest_reg_val;
+
+	try w.print("{any} mem[{d}] -> {d}\n", .{instr.Op, disp, imm});
+
+	Memory[disp] = @intCast(imm & 0xFF); // Low byte
+	Memory[disp + 1] = @intCast((imm >> 8) & 0xFF); // High byte
+
+	return;
+    }
+
+    // Load 
+    if (src.Type == .OperandMemory) {
+	const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
+	const disp = @as(u16, @intCast(src.data.Address.Displacement));
+
+	const low = Memory[disp];
+	const high = Memory[disp + 1];
+	const val = low | (@as(u16, high) << 8);
+
+	try w.print("{any} {s} -> mem[{d}] ({d})\n", .{instr.Op, dest_reg_name, disp, val});
+
+	try regs.put(dest_reg_name, val);
+
+	return;
+    }
+
     const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
     const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
 
@@ -119,6 +153,7 @@ fn doJne(w: anytype, regs: *Registers, instr: sim86.Instruction, offset: usize) 
     const jne_value = instr.Operands[0].data.Immediate.Value;
     try w.print("{any} {?d}\n", .{ instr.Op, jne_value });
 
+    // TODO use @abs?
     var new_offset = offset;
     if (zf == 0) {
         new_offset = if (jne_value < 0)
