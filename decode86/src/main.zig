@@ -100,14 +100,22 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
 
     // Load
     if (src.Type == .OperandMemory) {
-	const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
-	const disp = @as(u16, @intCast(src.data.Address.Displacement));
+	const src_address_reg1 = sim86.registerNameFromOperand(&src.data.Address.Terms[0].Register);
+	const src_address_reg_val1 = regs.get(src_address_reg1) orelse 0;
 
-	const low = Memory[disp];
-	const high = Memory[disp + 1];
+	const src_address_reg2 = sim86.registerNameFromOperand(&src.data.Address.Terms[1].Register);
+	const src_address_reg_val2 = regs.get(src_address_reg2) orelse 0;
+
+	const disp_imm = @as(u16, @intCast(src.data.Address.Displacement));
+	const disp_full = disp_imm + src_address_reg_val1 + src_address_reg_val2;
+
+	const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
+
+	const low = Memory[disp_full];
+	const high = Memory[disp_full + 1];
 	const val = low | (@as(u16, high) << 8);
 
-	try w.print("{any} {s} -> mem[{d}] ({d})\n", .{instr.Op, dest_reg_name, disp, val});
+	try w.print("{any} {s} -> mem[{d}] ({d})\n", .{instr.Op, dest_reg_name, disp_full, val});
 
 	try regs.put(dest_reg_name, val);
 
