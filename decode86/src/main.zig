@@ -1,37 +1,84 @@
 const std = @import("std");
 const sim86 = @import("sim86.zig");
 
-const Registers = std.StringHashMap(u16);
+const Registers = struct {
+    ax: u16,
+    bx: u16,
+    cx: u16,
+    dx: u16,
+    si: u16,
+    di: u16,
+    bp: u16,
+    sp: u16,
+    ip: u16,
+    flags: u16,
+};
+
 var Memory = std.mem.zeroes([1024 * 1024]u8);
 
-fn initRegisters(allocator: std.mem.Allocator) !Registers {
-    var regs = Registers.init(allocator);
-    try regs.put("ax", 0);
-    try regs.put("bx", 0);
-    try regs.put("cx", 0);
-    try regs.put("dx", 0);
-    try regs.put("si", 0);
-    try regs.put("di", 0);
-    try regs.put("bp", 0);
-    try regs.put("sp", 0);
-    try regs.put("ip", 0);
-    try regs.put("flags", 0);
-    return regs;
+// Helper function to get register value by name
+fn getRegister(regs: *const Registers, reg_name: []const u8) !u16 {
+    if (std.mem.eql(u8, reg_name, "ax")) {
+        return regs.ax;
+    } else if (std.mem.eql(u8, reg_name, "bx")) {
+        return regs.bx;
+    } else if (std.mem.eql(u8, reg_name, "cx")) {
+        return regs.cx;
+    } else if (std.mem.eql(u8, reg_name, "dx")) {
+        return regs.dx;
+    } else if (std.mem.eql(u8, reg_name, "si")) {
+        return regs.si;
+    } else if (std.mem.eql(u8, reg_name, "di")) {
+        return regs.di;
+    } else if (std.mem.eql(u8, reg_name, "bp")) {
+        return regs.bp;
+    } else if (std.mem.eql(u8, reg_name, "sp")) {
+        return regs.sp;
+    } else if (std.mem.eql(u8, reg_name, "ip")) {
+        return regs.ip;
+    } else if (std.mem.eql(u8, reg_name, "flags")) {
+        return regs.flags;
+    } else return 0;
+}
+
+// Helper function to set register value by name
+fn setRegister(regs: *Registers, reg_name: []const u8, value: u16) !void {
+    if (std.mem.eql(u8, reg_name, "ax")) {
+        regs.ax = value;
+    } else if (std.mem.eql(u8, reg_name, "bx")) {
+        regs.bx = value;
+    } else if (std.mem.eql(u8, reg_name, "cx")) {
+        regs.cx = value;
+    } else if (std.mem.eql(u8, reg_name, "dx")) {
+        regs.dx = value;
+    } else if (std.mem.eql(u8, reg_name, "si")) {
+        regs.si = value;
+    } else if (std.mem.eql(u8, reg_name, "di")) {
+        regs.di = value;
+    } else if (std.mem.eql(u8, reg_name, "bp")) {
+        regs.bp = value;
+    } else if (std.mem.eql(u8, reg_name, "sp")) {
+        regs.sp = value;
+    } else if (std.mem.eql(u8, reg_name, "ip")) {
+        regs.ip = value;
+    } else if (std.mem.eql(u8, reg_name, "flags")) {
+        regs.flags = value;
+    } else return error.InvalidRegisterName;
 }
 
 fn printRegisters(w: anytype, regs: *Registers) !void {
     try w.print("Final registers:\n", .{});
-    try w.print("\tax: {?x}\n", .{regs.get("ax")});
-    try w.print("\tbx: {?x}\n", .{regs.get("bx")});
-    try w.print("\tcx: {?x}\n", .{regs.get("cx")});
-    try w.print("\tdx: {?x}\n", .{regs.get("dx")});
-    try w.print("\tsp: {?x}\n", .{regs.get("sp")});
-    try w.print("\tbp: {?x}\n", .{regs.get("bp")});
-    try w.print("\tsi: {?x}\n", .{regs.get("si")});
-    try w.print("\tdi: {?x}\n", .{regs.get("di")});
-    try w.print("\tip: {?x}\n", .{regs.get("ip")});
+    try w.print("\tax: {?x}\n", .{regs.ax});
+    try w.print("\tbx: {?x}\n", .{regs.bx});
+    try w.print("\tcx: {?x}\n", .{regs.cx});
+    try w.print("\tdx: {?x}\n", .{regs.dx});
+    try w.print("\tsp: {?x}\n", .{regs.sp});
+    try w.print("\tbp: {?x}\n", .{regs.bp});
+    try w.print("\tsi: {?x}\n", .{regs.si});
+    try w.print("\tdi: {?x}\n", .{regs.di});
+    try w.print("\tip: {?x}\n", .{regs.ip});
 
-    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
+    const flags = regs.flags;
     const sf = (flags >> 7) & 1;
     const zf = (flags >> 6) & 1;
 
@@ -42,7 +89,7 @@ fn printRegisters(w: anytype, regs: *Registers) !void {
 }
 
 fn setFlags(w: anytype, result: u16, regs: *Registers) !void {
-    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
+    const flags = regs.flags;
 
     const sf = (flags >> 7) & 1;
     const zf = (flags >> 6) & 1;
@@ -65,7 +112,7 @@ fn setFlags(w: anytype, result: u16, regs: *Registers) !void {
     }
 
     if (print_sf or print_zf) {
-        try regs.put("flags", updated_flags);
+        regs.flags = updated_flags;
         try w.print(" flags: {s}{s} -> {s}{s}", .{ if (sf == 1) "S" else "", if (zf == 1) "Z" else "", if (new_sf == 1) "S" else "", if (new_zf == 1) "Z" else "" });
     }
 }
@@ -77,20 +124,21 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     // Store
     if (dest.Type == .OperandMemory) {
         const dest_address_reg1 = sim86.registerNameFromOperand(&dest.data.Address.Terms[0].Register);
-        const dest_address_reg_val1 = regs.get(dest_address_reg1) orelse 0;
+        const dest_address_reg_val1 = try getRegister(regs, dest_address_reg1);
 
         const dest_address_reg2 = sim86.registerNameFromOperand(&dest.data.Address.Terms[1].Register);
-        const dest_address_reg_val2 = regs.get(dest_address_reg2) orelse 0;
+        const dest_address_reg_val2 = try getRegister(regs, dest_address_reg2);
 
         const disp_imm = @as(u16, @intCast(dest.data.Address.Displacement));
         const disp_full = disp_imm + dest_address_reg_val1 + dest_address_reg_val2;
 
         var src_val = if (src.data.Register.Count != 0)
-            regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
+            try getRegister(regs, sim86.registerNameFromOperand(&src.data.Register))
         else
             src.data.Immediate.Value;
         src_val = @as(u16, @intCast(src_val));
 
+        // TODO Use mnemonicFromOperationType?
         try w.print("{any} mem[{d}] -> {d}\n", .{ instr.Op, disp_full, src_val });
         Memory[disp_full] = @intCast(src_val & 0xFF); // Low byte
         Memory[disp_full + 1] = @intCast((src_val >> 8) & 0xFF); // High byte
@@ -101,10 +149,10 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     // Load
     if (src.Type == .OperandMemory) {
         const src_address_reg1 = sim86.registerNameFromOperand(&src.data.Address.Terms[0].Register);
-        const src_address_reg_val1 = regs.get(src_address_reg1) orelse 0;
+        const src_address_reg_val1 = try getRegister(regs, src_address_reg1);
 
         const src_address_reg2 = sim86.registerNameFromOperand(&src.data.Address.Terms[1].Register);
-        const src_address_reg_val2 = regs.get(src_address_reg2) orelse 0;
+        const src_address_reg_val2 = try getRegister(regs, src_address_reg2);
 
         const disp_imm = @as(u16, @intCast(src.data.Address.Displacement));
         const disp_full = disp_imm + src_address_reg_val1 + src_address_reg_val2;
@@ -117,23 +165,23 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
 
         try w.print("{any} {s} -> mem[{d}] ({d})\n", .{ instr.Op, dest_reg_name, disp_full, val });
 
-        try regs.put(dest_reg_name, val);
+        try setRegister(regs, dest_reg_name, val);
 
         return;
     }
 
     const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
-    const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
+    const dest_reg_val = try getRegister(regs, dest_reg_name);
 
     const src_reg_val_full = if (src.data.Register.Count != 0)
-        regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
+        try getRegister(regs, sim86.registerNameFromOperand(&src.data.Register))
     else
         src.data.Immediate.Value;
     const src_reg_val = @as(u16, @intCast(src_reg_val_full));
 
     try w.print("{any} {s}:\t{?x} -> {?x}\n", .{ instr.Op, dest_reg_name, dest_reg_val, src_reg_val });
 
-    try regs.put(dest_reg_name, src_reg_val);
+    setRegister(regs, dest_reg_name, src_reg_val) catch std.debug.print("catch: {s}\n", .{dest_reg_name});
 }
 
 fn doAddSubCmp(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
@@ -141,10 +189,10 @@ fn doAddSubCmp(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     var src = instr.Operands[1];
 
     const dest_reg_name = sim86.registerNameFromOperand(&dest.data.Register);
-    const dest_reg_val = regs.get(dest_reg_name) orelse return error.DestRegDoesNotExist;
+    const dest_reg_val = try getRegister(regs, dest_reg_name);
 
     const src_reg_val_full = if (src.data.Register.Count != 0)
-        regs.get(sim86.registerNameFromOperand(&src.data.Register)) orelse return error.SrcRegDoesNotExist
+        try getRegister(regs, sim86.registerNameFromOperand(&src.data.Register))
     else
         src.data.Immediate.Value;
     const src_reg_val = @as(u16, @intCast(src_reg_val_full));
@@ -158,12 +206,12 @@ fn doAddSubCmp(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     try w.print("{any} {s}:\t{?d} -> {?d}", .{ instr.Op, dest_reg_name, dest_reg_val, result });
     try setFlags(w, result, regs);
 
-    if (instr.Op != .Op_cmp) try regs.put(dest_reg_name, result);
+    if (instr.Op != .Op_cmp) try setRegister(regs, dest_reg_name, result);
     try w.print("\n", .{});
 }
 
 fn doJne(w: anytype, regs: *Registers, instr: sim86.Instruction, offset: usize) !usize {
-    const flags = regs.get("flags") orelse return error.FlagsRegDoesNotExist;
+    const flags = regs.flags;
     const zf = (flags >> 6) & 1;
     const jne_value = instr.Operands[0].data.Immediate.Value;
     try w.print("{any} {?d}\n", .{ instr.Op, jne_value });
@@ -210,8 +258,7 @@ pub fn main() !void {
         _ = gpa.deinit();
     }
 
-    var regs = try initRegisters(allocator);
-    defer regs.deinit();
+    var regs = std.mem.zeroInit(Registers, .{});
 
     const stat = try file.stat();
     const buffer = try file.readToEndAlloc(allocator, stat.size);
@@ -221,8 +268,7 @@ pub fn main() !void {
     while (offset < buffer.len) {
         const decoded = try sim86.decode8086Instruction(buffer[offset..buffer.len]);
 
-        const ip = regs.get("ip") orelse return error.IpRegDoesNotExist;
-        try regs.put("ip", @addWithOverflow(ip, @as(u16, @intCast(decoded.Size)))[0]);
+        regs.ip = @addWithOverflow(regs.ip, @as(u16, @intCast(decoded.Size)))[0];
 
         switch (decoded.Op) {
             .Op_mov => try doMov(w, &regs, decoded),
