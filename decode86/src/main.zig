@@ -19,50 +19,50 @@ var Memory = std.mem.zeroes([1024 * 1024]u8);
 // Helper function to get register value by name
 fn getRegister(regs: *const Registers, reg_name: []const u8) !u16 {
     if (std.mem.eql(u8, reg_name, "ax")) {
-	return regs.ax;
+        return regs.ax;
     } else if (std.mem.eql(u8, reg_name, "bx")) {
-	return regs.bx;
+        return regs.bx;
     } else if (std.mem.eql(u8, reg_name, "cx")) {
-	return regs.cx;
+        return regs.cx;
     } else if (std.mem.eql(u8, reg_name, "dx")) {
-	return regs.dx;
+        return regs.dx;
     } else if (std.mem.eql(u8, reg_name, "si")) {
-	return regs.si;
+        return regs.si;
     } else if (std.mem.eql(u8, reg_name, "di")) {
-	return regs.di;
+        return regs.di;
     } else if (std.mem.eql(u8, reg_name, "bp")) {
-	return regs.bp;
+        return regs.bp;
     } else if (std.mem.eql(u8, reg_name, "sp")) {
-	return regs.sp;
+        return regs.sp;
     } else if (std.mem.eql(u8, reg_name, "ip")) {
-	return regs.ip;
+        return regs.ip;
     } else if (std.mem.eql(u8, reg_name, "flags")) {
-	return regs.flags;
+        return regs.flags;
     } else return 0;
 }
 
 // Helper function to set register value by name
 fn setRegister(regs: *Registers, reg_name: []const u8, value: u16) !void {
     if (std.mem.eql(u8, reg_name, "ax")) {
-	regs.ax = value;
+        regs.ax = value;
     } else if (std.mem.eql(u8, reg_name, "bx")) {
-	regs.bx = value;
+        regs.bx = value;
     } else if (std.mem.eql(u8, reg_name, "cx")) {
-	regs.cx = value;
+        regs.cx = value;
     } else if (std.mem.eql(u8, reg_name, "dx")) {
-	regs.dx = value;
+        regs.dx = value;
     } else if (std.mem.eql(u8, reg_name, "si")) {
-	regs.si = value;
+        regs.si = value;
     } else if (std.mem.eql(u8, reg_name, "di")) {
-	regs.di = value;
+        regs.di = value;
     } else if (std.mem.eql(u8, reg_name, "bp")) {
-	regs.bp = value;
+        regs.bp = value;
     } else if (std.mem.eql(u8, reg_name, "sp")) {
-	regs.sp = value;
+        regs.sp = value;
     } else if (std.mem.eql(u8, reg_name, "ip")) {
-	regs.ip = value;
+        regs.ip = value;
     } else if (std.mem.eql(u8, reg_name, "flags")) {
-	regs.flags = value;
+        regs.flags = value;
     } else return error.InvalidRegisterName;
 }
 
@@ -112,7 +112,7 @@ fn setFlags(w: anytype, result: u16, regs: *Registers) !void {
     }
 
     if (print_sf or print_zf) {
-	regs.flags = updated_flags;
+        regs.flags = updated_flags;
         try w.print(" flags: {s}{s} -> {s}{s}", .{ if (sf == 1) "S" else "", if (zf == 1) "Z" else "", if (new_sf == 1) "S" else "", if (new_zf == 1) "Z" else "" });
     }
 }
@@ -138,7 +138,7 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
             src.data.Immediate.Value;
         src_val = @as(u16, @intCast(src_val));
 
-	// TODO Use mnemonicFromOperationType?
+        // TODO Use mnemonicFromOperationType?
         try w.print("{any} mem[{d}] -> {d}\n", .{ instr.Op, disp_full, src_val });
         Memory[disp_full] = @intCast(src_val & 0xFF); // Low byte
         Memory[disp_full + 1] = @intCast((src_val >> 8) & 0xFF); // High byte
@@ -165,7 +165,7 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
 
         try w.print("{any} {s} -> mem[{d}] ({d})\n", .{ instr.Op, dest_reg_name, disp_full, val });
 
-	try setRegister(regs, dest_reg_name, val);
+        try setRegister(regs, dest_reg_name, val);
 
         return;
     }
@@ -268,7 +268,7 @@ pub fn main() !void {
     while (offset < buffer.len) {
         const decoded = try sim86.decode8086Instruction(buffer[offset..buffer.len]);
 
-	regs.ip = @addWithOverflow(regs.ip, @as(u16, @intCast(decoded.Size)))[0];
+        regs.ip = @addWithOverflow(regs.ip, @as(u16, @intCast(decoded.Size)))[0];
 
         switch (decoded.Op) {
             .Op_mov => try doMov(w, &regs, decoded),
