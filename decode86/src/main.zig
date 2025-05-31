@@ -1,6 +1,8 @@
 const std = @import("std");
 const sim86 = @import("sim86.zig");
 
+var Memory = std.mem.zeroes([1024 * 1024]u8);
+
 const Registers = struct {
     ax: u16,
     bx: u16,
@@ -14,56 +16,52 @@ const Registers = struct {
     flags: u16,
 };
 
-var Memory = std.mem.zeroes([1024 * 1024]u8);
+// For use with stringToEnum to switch on reg_name
+const RegistersEnum = enum {
+    ax,
+    bx,
+    cx,
+    dx,
+    si,
+    di,
+    bp,
+    sp,
+    ip,
+    flags,
+};
 
-// Helper function to get register value by name
 fn getRegister(regs: *const Registers, reg_name: []const u8) !u16 {
-    if (std.mem.eql(u8, reg_name, "ax")) {
-        return regs.ax;
-    } else if (std.mem.eql(u8, reg_name, "bx")) {
-        return regs.bx;
-    } else if (std.mem.eql(u8, reg_name, "cx")) {
-        return regs.cx;
-    } else if (std.mem.eql(u8, reg_name, "dx")) {
-        return regs.dx;
-    } else if (std.mem.eql(u8, reg_name, "si")) {
-        return regs.si;
-    } else if (std.mem.eql(u8, reg_name, "di")) {
-        return regs.di;
-    } else if (std.mem.eql(u8, reg_name, "bp")) {
-        return regs.bp;
-    } else if (std.mem.eql(u8, reg_name, "sp")) {
-        return regs.sp;
-    } else if (std.mem.eql(u8, reg_name, "ip")) {
-        return regs.ip;
-    } else if (std.mem.eql(u8, reg_name, "flags")) {
-        return regs.flags;
-    } else return 0;
+    const register = std.meta.stringToEnum(RegistersEnum, reg_name) orelse return 0;
+
+    return switch (register) {
+        .ax => regs.ax,
+        .bx => regs.bx,
+        .cx => regs.cx,
+        .dx => regs.dx,
+        .si => regs.si,
+        .di => regs.di,
+        .bp => regs.bp,
+        .sp => regs.sp,
+        .ip => regs.ip,
+        .flags => regs.flags,
+    };
 }
 
-// Helper function to set register value by name
 fn setRegister(regs: *Registers, reg_name: []const u8, value: u16) !void {
-    if (std.mem.eql(u8, reg_name, "ax")) {
-        regs.ax = value;
-    } else if (std.mem.eql(u8, reg_name, "bx")) {
-        regs.bx = value;
-    } else if (std.mem.eql(u8, reg_name, "cx")) {
-        regs.cx = value;
-    } else if (std.mem.eql(u8, reg_name, "dx")) {
-        regs.dx = value;
-    } else if (std.mem.eql(u8, reg_name, "si")) {
-        regs.si = value;
-    } else if (std.mem.eql(u8, reg_name, "di")) {
-        regs.di = value;
-    } else if (std.mem.eql(u8, reg_name, "bp")) {
-        regs.bp = value;
-    } else if (std.mem.eql(u8, reg_name, "sp")) {
-        regs.sp = value;
-    } else if (std.mem.eql(u8, reg_name, "ip")) {
-        regs.ip = value;
-    } else if (std.mem.eql(u8, reg_name, "flags")) {
-        regs.flags = value;
-    } else return error.InvalidRegisterName;
+    const register = std.meta.stringToEnum(RegistersEnum, reg_name) orelse return error.InvalidRegisterAccess;
+
+    switch (register) {
+        .ax => regs.ax = value,
+        .bx => regs.bx = value,
+        .cx => regs.cx = value,
+        .dx => regs.dx = value,
+        .si => regs.si = value,
+        .di => regs.di = value,
+        .bp => regs.bp = value,
+        .sp => regs.sp = value,
+        .ip => regs.ip = value,
+        .flags => regs.flags = value,
+    }
 }
 
 fn printRegisters(w: anytype, regs: *Registers) !void {
