@@ -137,7 +137,7 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
         src_val = @as(u16, @intCast(src_val));
 
         // TODO Use mnemonicFromOperationType?
-        try w.print("{any} mem[{d}] -> {d}\n", .{ instr.Op, disp_full, src_val });
+        try w.print("{any} mem[{d}] -> {d}", .{ instr.Op, disp_full, src_val });
         Memory[disp_full] = @intCast(src_val & 0xFF); // Low byte
         Memory[disp_full + 1] = @intCast((src_val >> 8) & 0xFF); // High byte
 
@@ -161,7 +161,7 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
         const high = Memory[disp_full + 1];
         const val = low | (@as(u16, high) << 8);
 
-        try w.print("{any} {s} -> mem[{d}] ({d})\n", .{ instr.Op, dest_reg_name, disp_full, val });
+        try w.print("{any} {s} -> mem[{d}] ({d})", .{ instr.Op, dest_reg_name, disp_full, val });
 
         try setRegister(regs, dest_reg_name, val);
 
@@ -177,9 +177,11 @@ fn doMov(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
         src.data.Immediate.Value;
     const src_reg_val = @as(u16, @intCast(src_reg_val_full));
 
-    try w.print("{any} {s}:\t{?x} -> {?x}\n", .{ instr.Op, dest_reg_name, dest_reg_val, src_reg_val });
+    try w.print("{any} {s}:\t{?x} -> {?x}", .{ instr.Op, dest_reg_name, dest_reg_val, src_reg_val });
 
     setRegister(regs, dest_reg_name, src_reg_val) catch std.debug.print("catch: {s}\n", .{dest_reg_name});
+
+
 }
 
 fn doAddSubCmp(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
@@ -205,14 +207,13 @@ fn doAddSubCmp(w: anytype, regs: *Registers, instr: sim86.Instruction) !void {
     try setFlags(w, result, regs);
 
     if (instr.Op != .Op_cmp) try setRegister(regs, dest_reg_name, result);
-    try w.print("\n", .{});
 }
 
 fn doJne(w: anytype, regs: *Registers, instr: sim86.Instruction, offset: usize) !usize {
     const flags = regs.flags;
     const zf = (flags >> 6) & 1;
     const jne_value = instr.Operands[0].data.Immediate.Value;
-    try w.print("{any} {?d}\n", .{ instr.Op, jne_value });
+    try w.print("{any} {?d}", .{ instr.Op, jne_value });
 
     // TODO use @abs?
     var new_offset = offset;
@@ -225,6 +226,49 @@ fn doJne(w: anytype, regs: *Registers, instr: sim86.Instruction, offset: usize) 
     }
 
     return new_offset;
+}
+
+// TODO Pull do/calc functions into separate modules?
+// See instruction cycle counts near table 2-20
+fn calcCyclesMov(w: anytype, instr: sim86.Instruction) !void {
+    const dest = instr.Operands[0];
+    const src = instr.Operands[1];
+
+    _ = try w.write("; cycles +");
+
+    // mov reg, imm
+    if (src.Type == .OperandImmediate) {
+	_ = try w.write("4");
+    }
+
+    // mov reg, reg
+    if (src.Type == .OperandRegister and dest.Type == .OperandRegister) {
+	_ = try w.write("2");
+    }
+
+    // mov reg, [immediate disp]
+    // clocks = 8 + ea (6 for disp only)
+    if (dest.Type == .OperandRegister and src.Type == .OperandMemory and src.data.Address.Terms[0].Register.Index == 0) {
+	_ = try w.write("(8 + 6)");
+    }
+
+    // mov reg, [reg addr]
+    if (dest.Type == .OperandRegister and src.Type == .OperandMemory and src.data.Address.Terms[0].Register.Index > 0) {
+	_ = try w.write("(8 + 5)");
+    }
+
+    // mov [reg addr], reg
+    // clocks = 9 + ea (5 for reg addr disp)
+    if (src.Type == .OperandRegister and dest.Type == .OperandMemory and dest.data.Address.Displacement == 0) {
+	_ = try w.write("(9 + 5)");
+    }
+
+    // mov reg, [disp + base/index]
+    // clocks = 8 + ea (9 for disp + base/index)
+    if (src.data.Address.Displacement > 0) {
+	try w.print("{any}\n", .{src.data.Address.Displacement});
+	_ = try w.write("test");
+    }
 }
 
 pub fn main() !void {
@@ -269,13 +313,18 @@ pub fn main() !void {
         regs.ip = @addWithOverflow(regs.ip, @as(u16, @intCast(decoded.Size)))[0];
 
         switch (decoded.Op) {
-            .Op_mov => try doMov(w, &regs, decoded),
+            .Op_mov => {
+		try doMov(w, &regs, decoded);
+		try calcCyclesMov(w, decoded);
+	    },
             .Op_add, .Op_cmp, .Op_sub => try doAddSubCmp(w, &regs, decoded),
             .Op_jne => offset = try doJne(w, &regs, decoded, offset),
             else => {
                 try w.print("unhandled: {any}\n", .{decoded.Op});
             },
         }
+
+	_ = try w.write("\n");
 
         offset += decoded.Size;
     }
