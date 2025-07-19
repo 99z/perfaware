@@ -58,15 +58,17 @@ fn referenceHaversine(x0: f32, y0: f32, x1: f32, y1: f32, earth_radius: f32) f32
 //
 // stdout approach:
 //   - ./zig-out/bin/havergen > points.json  6.53s user 0.92s system 98% cpu 7.530 total
-// TODO file write approach
+// file write approach:
+//   - ./zig-out/bin/havergen  6.61s user 1.09s system 98% cpu 7.791 total
 pub fn main() !void {
     const stdout_file = std.io.getStdOut().writer();
-    const stderr_file = std.io.getStdErr().writer();
     var bw = std.io.bufferedWriter(stdout_file);
-    var bw_err = std.io.bufferedWriter(stderr_file);
-
     const stdout = bw.writer();
-    const stderr = bw_err.writer();
+
+    const points_file = try std.fs.cwd().createFile("points.json", .{});
+    defer points_file.close();
+    var points_file_bw = std.io.bufferedWriter(points_file.writer());
+    var points_bw = points_file_bw.writer();
 
     const num_points = 10_000_000;
     var sum: f32 = 0;
@@ -91,11 +93,11 @@ pub fn main() !void {
 
         const haversine_pair: HaversinePair = .{ .x1 = p1.x, .y1 = p1.y, .x2 = p2.x, .y2 = p2.y, .distance = distance };
 
-        try std.json.stringify(haversine_pair, .{ .whitespace = .indent_tab }, stdout);
-        try stdout.print(",\n", .{});
+        try std.json.stringify(haversine_pair, .{ .whitespace = .indent_tab }, points_bw);
+        _ = try points_bw.write(",\n");
     }
 
-    try stderr.print("Average: {d}\n", .{sum / num_points});
+    try stdout.print("Average: {d}\n", .{sum / num_points});
     try bw.flush();
-    try bw_err.flush();
+    try points_file_bw.flush();
 }
