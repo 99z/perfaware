@@ -60,6 +60,27 @@ fn referenceHaversine(x0: f32, y0: f32, x1: f32, y1: f32, earth_radius: f32) f32
 //   - ./zig-out/bin/havergen > points.json  6.53s user 0.92s system 98% cpu 7.530 total
 // TODO file write approach
 pub fn main() !void {
+    var args = std.process.args();
+    _ = args.skip();
+
+    const num_points_arg = args.next() orelse {
+        std.debug.print("usage: havergen <num_points> <seed?>\n", .{});
+        return error.NoNumPoints;
+    };
+    const num_points = try std.fmt.parseInt(usize, num_points_arg, 10);
+
+    const seed_arg = args.next() orelse &.{};
+    var seed: usize = undefined;
+
+    if (seed_arg.len != 0) {
+        seed = std.fmt.parseInt(usize, seed_arg, 10) catch {
+            std.debug.print("seed must be an integer\n", .{});
+            return error.BadSeed;
+        };
+    }
+
+    std.debug.print("seed: {d}\n", .{seed});
+
     const stdout_file = std.io.getStdOut().writer();
     const stderr_file = std.io.getStdErr().writer();
     var bw = std.io.bufferedWriter(stdout_file);
@@ -68,12 +89,10 @@ pub fn main() !void {
     const stdout = bw.writer();
     const stderr = bw_err.writer();
 
-    const num_points = 10_000_000;
     var sum: f32 = 0;
 
     for (0..num_points) |_| {
         var prng = std.Random.DefaultPrng.init(blk: {
-            var seed: u64 = undefined;
             try std.posix.getrandom(std.mem.asBytes(&seed));
             break :blk seed;
         });
@@ -95,7 +114,8 @@ pub fn main() !void {
         try stdout.print(",\n", .{});
     }
 
-    try stderr.print("Average: {d}\n", .{sum / num_points});
+    const num_points_float: f32 = @floatFromInt(num_points);
+    try stderr.print("Average: {d}\n", .{sum / num_points_float});
     try bw.flush();
     try bw_err.flush();
 }
