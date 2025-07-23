@@ -6,11 +6,10 @@ const Point = struct {
 };
 
 const HaversinePair = struct {
+    x0: f32,
+    y0: f32,
     x1: f32,
     y1: f32,
-    x2: f32,
-    y2: f32,
-    distance: f32,
 };
 
 const EARTH_RADIUS = 6372.8;
@@ -48,6 +47,20 @@ fn referenceHaversine(x0: f32, y0: f32, x1: f32, y1: f32, earth_radius: f32) f32
     return earth_radius * c;
 }
 
+fn generatePairs(rand: std.Random) HaversinePair {
+    const x0 = unitIntervalToLong(rand.float(f32));
+    const x1 = unitIntervalToLong(rand.float(f32));
+    const y0 = unitIntervalToLat(rand.float(f32));
+    const y1 = unitIntervalToLat(rand.float(f32));
+
+    const p1: Point = .{ .x = x0, .y = y0 };
+    const p2: Point = .{ .x = x1, .y = y1 };
+
+    const haversine_pair: HaversinePair = .{ .x0 = p1.x, .y0 = p1.y, .x1 = p2.x, .y1 = p2.y };
+
+    return haversine_pair;
+}
+
 // Writes points to stdout, diagnostic data to stderr
 // Use `havergen >points.json` to write to file but preserve
 // stderr output
@@ -79,7 +92,11 @@ pub fn main() !void {
         };
     }
 
-    std.debug.print("seed: {d}\n", .{seed});
+    var prng = std.Random.DefaultPrng.init(blk: {
+        try std.posix.getrandom(std.mem.asBytes(&seed));
+        break :blk seed;
+    });
+    const rand = prng.random();
 
     const stdout_file = std.io.getStdOut().writer();
     const stderr_file = std.io.getStdErr().writer();
@@ -92,25 +109,11 @@ pub fn main() !void {
     var sum: f32 = 0;
 
     for (0..num_points) |_| {
-        var prng = std.Random.DefaultPrng.init(blk: {
-            try std.posix.getrandom(std.mem.asBytes(&seed));
-            break :blk seed;
-        });
-        const rand = prng.random();
-        const x0 = unitIntervalToLong(rand.float(f32));
-        const x1 = unitIntervalToLong(rand.float(f32));
-        const y0 = unitIntervalToLat(rand.float(f32));
-        const y1 = unitIntervalToLat(rand.float(f32));
-
-        const p1: Point = .{ .x = x0, .y = y0 };
-        const p2: Point = .{ .x = x1, .y = y1 };
-
-        const distance = referenceHaversine(p1.x, p1.y, p2.x, p2.y, EARTH_RADIUS);
+        const pair = generatePairs(rand);
+        const distance = referenceHaversine(pair.x0, pair.y0, pair.x1, pair.y1, EARTH_RADIUS);
         sum += distance;
 
-        const haversine_pair: HaversinePair = .{ .x1 = p1.x, .y1 = p1.y, .x2 = p2.x, .y2 = p2.y, .distance = distance };
-
-        try std.json.stringify(haversine_pair, .{ .whitespace = .indent_tab }, stdout);
+        try std.json.stringify(pair, .{ .whitespace = .indent_2 }, stdout);
         try stdout.print(",\n", .{});
     }
 
