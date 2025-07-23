@@ -108,17 +108,19 @@ pub fn main() !void {
 
     var sum: f32 = 0;
 
-    for (0..num_points) |_| {
+    try stdout.print("[\"points\": ", .{});
+    for (0..num_points) |i| {
         const pair = generatePairs(rand);
         const distance = referenceHaversine(pair.x0, pair.y0, pair.x1, pair.y1, EARTH_RADIUS);
         sum += distance;
 
-        try std.json.stringify(pair, .{ .whitespace = .indent_2 }, stdout);
-        try stdout.print(",\n", .{});
+        try std.json.stringify(pair, .{ .whitespace = .minified }, stdout);
+        if (i != num_points - 1) try stdout.print(",", .{});
     }
+    try stdout.print("]", .{});
 
     const num_points_float: f32 = @floatFromInt(num_points);
-    try stderr.print("Average: {d}\n", .{sum / num_points_float});
+    try stderr.print("\nAverage: {d}\n", .{sum / num_points_float});
     try bw.flush();
     try bw_err.flush();
 }
