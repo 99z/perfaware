@@ -114,33 +114,35 @@ fn generatePairs(rand: std.Random, num_points: usize, stdout: anytype) !f32 {
 //   - ./zig-out/bin/havergen > points.json  6.53s user 0.92s system 98% cpu 7.530 total
 // file write approach: didn't see performance gain
 pub fn main() !void {
-    var args = std.process.args();
-    _ = args.skip();
+    if (std.os.argv.len < 3) {
+        std.debug.print("Usage: havergen <clustered|uniform> <num_points> <seed?>", .{});
+        return error.InvalidArgLength;
+    }
 
-    const cluster_type = args.next() orelse {
-        std.debug.print("usage: havergen <clustered|uniform> <num_points> <seed?>\n", .{});
-        return error.NoType;
+    const cluster_type = std.mem.span(std.os.argv[1]);
+    const num_points_arg = std.mem.span(std.os.argv[2]);
+
+    const num_points = std.fmt.parseInt(usize, num_points_arg, 10) catch {
+        std.debug.print("Error: Invalid number format: {s}\n", .{num_points_arg});
+        return error.BadNumPointsArg;
     };
 
-    const num_points_arg = args.next() orelse {
-        std.debug.print("usage: havergen <num_points> <seed?>\n", .{});
-        return error.NoNumPoints;
-    };
-    const num_points = try std.fmt.parseInt(usize, num_points_arg, 10);
-
-    const seed_arg = args.next() orelse &.{};
-    var seed: usize = undefined;
-
-    if (seed_arg.len != 0) {
+    var seed: ?usize = null;
+    if (std.os.argv.len == 4) {
+        const seed_arg = std.mem.span(std.os.argv[3]);
         seed = std.fmt.parseInt(usize, seed_arg, 10) catch {
-            std.debug.print("seed must be an integer\n", .{});
-            return error.BadSeed;
+            std.debug.print("Error: Invalid seed format: {s}\n", .{seed_arg});
+            return error.BadSeedArg;
         };
     }
 
+    if (seed != null) {
+        std.debug.print("seed: {?d}\n", .{seed});
+    }
+
     var prng = std.Random.DefaultPrng.init(blk: {
-        try std.posix.getrandom(std.mem.asBytes(&seed));
-        break :blk seed;
+        if (seed == null) try std.posix.getrandom(std.mem.asBytes(&seed));
+        break :blk seed orelse undefined;
     });
     const rand = prng.random();
 
