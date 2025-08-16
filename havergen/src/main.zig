@@ -154,7 +154,7 @@ pub fn main() !void {
     const stdout = bw.writer();
     const stderr = bw_err.writer();
 
-    try stdout.print("[\"points\": ", .{});
+    try stdout.print("{{\"points\": [", .{});
 
     var sum: f32 = 0;
     if (std.mem.eql(u8, cluster_type, "clustered")) {
@@ -163,7 +163,7 @@ pub fn main() !void {
         sum = try generatePairs(rand, num_points, stdout);
     }
 
-    try stdout.print("]", .{});
+    try stdout.print("]}}", .{});
 
     const num_points_float: f32 = @floatFromInt(num_points);
     try stderr.print("\nAverage: {d}\n", .{sum / num_points_float});
