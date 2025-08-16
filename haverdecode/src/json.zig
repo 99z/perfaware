@@ -25,18 +25,6 @@ pub const NXJson = struct {
         last: ?*NXJson,
     },
     next: ?*NXJson,
-
-    // TODO I'm not sure this is necessary
-    pub fn deinit(self: NXJson, allocator: std.mem.Allocator) void {
-        // Recursively free all children
-        var current_child = self.children.first;
-        while (current_child) |child| {
-            const next_child = child.next; // Save next before freeing
-            child.deinit(allocator); // Recursive call
-            allocator.destroy(child); // Free the child node
-            current_child = next_child;
-        }
-    }
 };
 
 const ParseKeyResult = struct {
@@ -79,7 +67,7 @@ fn parseKey(text: []const u8, start_pos: usize) !ParseKeyResult {
 
     while (pos < text.len) {
         const current = text[pos];
-        std.debug.print("parseKey -> current: {c}\n", .{current});
+        // std.debug.print("parseKey -> current: {c}\n", .{current});
         pos += 1;
 
         switch (current) {
@@ -114,7 +102,7 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
     while (pos < text.len) {
         const char = text[pos];
 
-        std.debug.print("parseValue -> char at pos {}: {c}\n", .{ pos, char });
+        // std.debug.print("parseValue -> char at pos {}: {c}\n", .{ pos, char });
 
         switch (char) {
             // \0 invalid char? Should return error?
@@ -138,12 +126,12 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
                     const new_key = key_result.key;
                     pos = key_result.new_pos;
 
-                    std.debug.print("parseValue -> key result: {s}\n", .{key_result.key});
+                    // std.debug.print("parseValue -> key result: {s}\n", .{key_result.key});
 
                     // Check for end of object
                     if (pos >= text.len) return error.UnexpectedEndOfText;
                     if (text[pos] == '}') {
-                        std.debug.print("end of obj\n", .{});
+                        // std.debug.print("end of obj\n", .{});
                         return pos + 1; // Return position after '}'
                     }
 
@@ -173,13 +161,13 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
 
                 var json = try createJson(allocator, NXJsonType.NX_JSON_FLOAT, key, parent);
 
-                std.debug.print("text[{}]: {c}\n", .{ pos + 2, text[pos + 2] });
+                // std.debug.print("text[{}]: {c}\n", .{ pos + 2, text[pos + 2] });
 
                 var end_idx: usize = 0;
 
                 while (true) {
                     if (text[pos + end_idx] == ',' or text[pos + end_idx] == '}') {
-                        std.debug.print("wat??\tend_idx: {} {c}\n", .{ end_idx, text[pos + end_idx] });
+                        // std.debug.print("wat??\tend_idx: {} {c}\n", .{ end_idx, text[pos + end_idx] });
                         break;
                     }
 
@@ -190,7 +178,7 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
 
                 const parsed_float = try std.fmt.parseFloat(f32, text[pos .. pos + end_idx]);
 
-                std.debug.print("parsed float: {d}\n", .{parsed_float});
+                // std.debug.print("parsed float: {d}\n", .{parsed_float});
 
                 json.dbl_value = parsed_float;
 
@@ -205,9 +193,12 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
     return error.UnexpectedEndOfText;
 }
 
-pub fn jsonParse(allocator: std.mem.Allocator, text: []const u8) !NXJson {
-    var nx_json = std.mem.zeroInit(NXJson, .{});
-    _ = try parseValue(allocator, &nx_json, "0", text, 0);
+pub fn parse(allocator: std.mem.Allocator, text: []const u8) !struct { json: NXJson, arena: std.heap.ArenaAllocator } {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    const arena_allocator = arena.allocator();
 
-    return nx_json;
+    var nx_json = std.mem.zeroInit(NXJson, .{});
+    _ = try parseValue(arena_allocator, &nx_json, "0", text, 0);
+
+    return .{ .json = nx_json, .arena = arena };
 }

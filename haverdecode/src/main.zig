@@ -76,12 +76,14 @@ pub fn main() !void {
         _ = gpa.deinit();
     }
 
-    const content = try file.readToEndAlloc(allocator, 4096 * 50);
+    const file_size = try file.getEndPos();
+    const content = try file.readToEndAlloc(allocator, file_size);
     defer allocator.free(content);
 
-    var result = try json.jsonParse(allocator, content);
-    printJsonTree(&result, 0);
+    var result = try json.parse(allocator, content);
+    defer result.arena.deinit();
 
-    result.deinit(allocator);
+    // printJsonTree(&result, 0);
+
     try bw.flush();
 }
