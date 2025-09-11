@@ -1,5 +1,6 @@
 const std = @import("std");
 const json = @import("json.zig");
+const builtin = @import("builtin");
 
 const Point = struct {
     x: f32,
@@ -48,7 +49,7 @@ fn printJsonTree(node: *json.NXJson, depth: usize) void {
         std.debug.print("  ", .{});
     }
 
-    std.debug.print("{s}: {d}\n", .{ node.key, node.dbl_value });
+    std.debug.print("{s}: {d} -> {}\n", .{ node.key, node.float_value, node.type });
 
     // Traverse children
     var child = node.children.first;
@@ -58,10 +59,59 @@ fn printJsonTree(node: *json.NXJson, depth: usize) void {
     }
 }
 
+fn parseResults(node: *json.NXJson) struct { usize, f32 } {
+    var sum: f32 = 0;
+    var num_points: usize = 0;
+
+    // Find the "points" array
+    var child = node.children.first;
+    while (child) |c| {
+        if (c.type == json.NXJsonType.NX_JSON_ARRAY and std.mem.eql(u8, c.key, "points")) {
+
+            // Iterate through each point object in the array
+            var point_obj = c.children.first;
+            while (point_obj) |point| {
+                if (point.type == json.NXJsonType.NX_JSON_OBJECT) {
+
+                    // Extract x0, y0, x1, y1 by finding them by key
+                    var x0: f64 = 0;
+                    var y0: f64 = 0;
+                    var x1: f64 = 0;
+                    var y1: f64 = 0;
+
+                    var coord = point.children.first;
+                    while (coord) |c_coord| {
+                        if (std.mem.eql(u8, c_coord.key, "x0")) {
+                            x0 = c_coord.float_value;
+                        } else if (std.mem.eql(u8, c_coord.key, "y0")) {
+                            y0 = c_coord.float_value;
+                        } else if (std.mem.eql(u8, c_coord.key, "x1")) {
+                            x1 = c_coord.float_value;
+                        } else if (std.mem.eql(u8, c_coord.key, "y1")) {
+                            y1 = c_coord.float_value;
+                        }
+                        coord = c_coord.next;
+                    }
+
+                    const distance = referenceHaversine(@floatCast(x0), @floatCast(y0), @floatCast(x1), @floatCast(y1), EARTH_RADIUS);
+                    sum += distance;
+                    num_points += 1;
+                }
+
+                point_obj = point.next;
+            }
+            break; // Found the points array, we're done
+        }
+        child = c.next;
+    }
+
+    return .{ num_points, sum };
+}
+
 pub fn main() !void {
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
 
     var args = std.process.args();
     _ = args.next();
@@ -83,7 +133,8 @@ pub fn main() !void {
     var result = try json.parse(allocator, content);
     defer result.arena.deinit();
 
-    // printJsonTree(&result, 0);
+    printJsonTree(&result.json, 0);
+    _ = parseResults(&result.json);
 
-    try bw.flush();
+    try stdout.flush();
 }

@@ -2,13 +2,9 @@ const std = @import("std");
 // Adapted from nxjson: https://github.com/thestr4ng3r/nxjson
 
 pub const NXJsonType = enum {
-    NX_JSON_NULL, // this is null value
-    NX_JSON_OBJECT, // this is an object; properties can be found in child nodes
-    NX_JSON_ARRAY, // this is an array; items can be found in child nodes
-    NX_JSON_STRING, // this is a string; value can be found in text_value field
-    NX_JSON_INTEGER, // this is an integer; value can be found in int_value field
-    NX_JSON_DOUBLE, // this is a double; value can be found in dbl_value field
-    NX_JSON_BOOL, // this is a boolean; value can be found in int_value field
+    NX_JSON_NULL,
+    NX_JSON_OBJECT,
+    NX_JSON_ARRAY,
     NX_JSON_FLOAT,
 };
 
@@ -16,8 +12,7 @@ pub const NXJson = struct {
     type: NXJsonType,
     key: []const u8,
     text_value: []const u8,
-    int_value: usize,
-    dbl_value: f64,
+    float_value: f32,
     length: usize,
     children: struct {
         length: usize,
@@ -52,14 +47,12 @@ fn createJson(allocator: std.mem.Allocator, kind: NXJsonType, key: []const u8, p
     return nx_json;
 }
 
-fn unescapeString(input: []const u8) !struct { key: []const u8, bytesConsumed: usize } {
+fn unescapeString(input: []const u8) ![]const u8 {
     var end_idx: usize = 0;
     while (end_idx < input.len and input[end_idx] != '"') : (end_idx += 1) {}
     if (end_idx >= input.len) return error.UnexpectedChars;
-    return .{
-        .key = input[0..end_idx],
-        .bytesConsumed = end_idx + 1, // +1 to skip closing quote
-    };
+
+    return input[0..end_idx];
 }
 
 fn parseKey(text: []const u8, start_pos: usize) !ParseKeyResult {
@@ -73,11 +66,11 @@ fn parseKey(text: []const u8, start_pos: usize) !ParseKeyResult {
         switch (current) {
             '"' => {
                 const result = try unescapeString(text[pos..]);
-                pos += result.bytesConsumed;
+                pos += result.len + 1; // +1 to skip closing quote
 
                 if (pos < text.len and text[pos] == ':') {
                     return ParseKeyResult{
-                        .key = result.key,
+                        .key = result,
                         .new_pos = pos + 1,
                     };
                 }
@@ -102,8 +95,6 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
     while (pos < text.len) {
         const char = text[pos];
 
-        // std.debug.print("parseValue -> char at pos {}: {c}\n", .{ pos, char });
-
         switch (char) {
             // \0 invalid char? Should return error?
             // Skip
@@ -113,7 +104,11 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
             },
             '{' => {
                 // New JSON object
-                const json = try createJson(allocator, NXJsonType.NX_JSON_OBJECT, key, parent);
+                const json = if (start_pos == 0)
+                    parent
+                else
+                    try createJson(allocator, NXJsonType.NX_JSON_OBJECT, key, parent);
+
                 // Move ptr
                 pos += 1;
 
@@ -126,12 +121,9 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
                     const new_key = key_result.key;
                     pos = key_result.new_pos;
 
-                    // std.debug.print("parseValue -> key result: {s}\n", .{key_result.key});
-
                     // Check for end of object
                     if (pos >= text.len) return error.UnexpectedEndOfText;
                     if (text[pos] == '}') {
-                        // std.debug.print("end of obj\n", .{});
                         return pos + 1; // Return position after '}'
                     }
 
@@ -160,14 +152,10 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
                 // Parse numbers
 
                 var json = try createJson(allocator, NXJsonType.NX_JSON_FLOAT, key, parent);
-
-                // std.debug.print("text[{}]: {c}\n", .{ pos + 2, text[pos + 2] });
-
                 var end_idx: usize = 0;
 
                 while (true) {
                     if (text[pos + end_idx] == ',' or text[pos + end_idx] == '}') {
-                        // std.debug.print("wat??\tend_idx: {} {c}\n", .{ end_idx, text[pos + end_idx] });
                         break;
                     }
 
@@ -178,9 +166,7 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
 
                 const parsed_float = try std.fmt.parseFloat(f32, text[pos .. pos + end_idx]);
 
-                // std.debug.print("parsed float: {d}\n", .{parsed_float});
-
-                json.dbl_value = parsed_float;
+                json.float_value = parsed_float;
 
                 return pos + end_idx;
             },
@@ -197,7 +183,7 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8) !struct { json: NXJ
     var arena = std.heap.ArenaAllocator.init(allocator);
     const arena_allocator = arena.allocator();
 
-    var nx_json = std.mem.zeroInit(NXJson, .{});
+    var nx_json = std.mem.zeroInit(NXJson, .{ .type = .NX_JSON_OBJECT });
     _ = try parseValue(arena_allocator, &nx_json, "0", text, 0);
 
     return .{ .json = nx_json, .arena = arena };
