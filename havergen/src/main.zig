@@ -49,7 +49,7 @@ fn generateClusteredPairs(rand: std.Random, num_points: usize, stdout: anytype) 
         const distance = referenceHaversine(haversine_pair.x0, haversine_pair.y0, haversine_pair.x1, haversine_pair.y1, EARTH_RADIUS);
         sum += distance;
 
-        try std.json.stringify(haversine_pair, .{ .whitespace = .minified }, stdout);
+        try std.json.Stringify.value(haversine_pair, .{ .whitespace = .minified }, stdout);
         // TODO This might be incorrect
         if (i != num_points - 1) try stdout.print(",", .{});
     }
@@ -95,7 +95,7 @@ fn generatePairs(rand: std.Random, num_points: usize, stdout: anytype) !f32 {
         const distance = referenceHaversine(haversine_pair.x0, haversine_pair.y0, haversine_pair.x1, haversine_pair.y1, EARTH_RADIUS);
         sum += distance;
 
-        try std.json.stringify(haversine_pair, .{ .whitespace = .minified }, stdout);
+        try std.json.Stringify.value(haversine_pair, .{ .whitespace = .minified }, stdout);
         if (i != num_points - 1) try stdout.print(",", .{});
     }
 
@@ -146,13 +146,13 @@ pub fn main() !void {
     });
     const rand = prng.random();
 
-    const stdout_file = std.io.getStdOut().writer();
-    const stderr_file = std.io.getStdErr().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    var bw_err = std.io.bufferedWriter(stderr_file);
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
 
-    const stdout = bw.writer();
-    const stderr = bw_err.writer();
+    var stderr_buffer: [4096]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    const stderr = &stderr_writer.interface;
 
     try stdout.print("{{\"points\": [", .{});
 
@@ -167,6 +167,7 @@ pub fn main() !void {
 
     const num_points_float: f32 = @floatFromInt(num_points);
     try stderr.print("\nAverage: {d}\n", .{sum / num_points_float});
-    try bw.flush();
-    try bw_err.flush();
+
+    try stdout.flush();
+    try stderr.flush();
 }

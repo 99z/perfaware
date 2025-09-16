@@ -133,8 +133,12 @@ pub fn main() !void {
     var result = try json.parse(allocator, content);
     defer result.arena.deinit();
 
-    printJsonTree(&result.json, 0);
-    _ = parseResults(&result.json);
+    // printJsonTree(&result.json, 0);
+    const parsed = parseResults(&result.json);
+    const num_points_float: f32 = @floatFromInt(parsed[0]);
+
+    try stdout.print("num points: {}\nsum:{}\n", .{ parsed[0], parsed[1] });
+    try stdout.print("average: {d}\n", .{parsed[1] / num_points_float});
 
     try stdout.flush();
 }
