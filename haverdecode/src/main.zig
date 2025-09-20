@@ -74,10 +74,10 @@ fn parseResults(node: *json.NXJson) struct { usize, f32 } {
                 if (point.type == json.NXJsonType.NX_JSON_OBJECT) {
 
                     // Extract x0, y0, x1, y1 by finding them by key
-                    var x0: f64 = 0;
-                    var y0: f64 = 0;
-                    var x1: f64 = 0;
-                    var y1: f64 = 0;
+                    var x0: f32 = 0;
+                    var y0: f32 = 0;
+                    var x1: f32 = 0;
+                    var y1: f32 = 0;
 
                     var coord = point.children.first;
                     while (coord) |c_coord| {
@@ -93,7 +93,7 @@ fn parseResults(node: *json.NXJson) struct { usize, f32 } {
                         coord = c_coord.next;
                     }
 
-                    const distance = referenceHaversine(@floatCast(x0), @floatCast(y0), @floatCast(x1), @floatCast(y1), EARTH_RADIUS);
+                    const distance = referenceHaversine(x0, y0, x1, y1, EARTH_RADIUS);
                     sum += distance;
                     num_points += 1;
                 }
@@ -137,7 +137,7 @@ pub fn main() !void {
     const parsed = parseResults(&result.json);
     const num_points_float: f32 = @floatFromInt(parsed[0]);
 
-    try stdout.print("num points: {}\nsum:{}\n", .{ parsed[0], parsed[1] });
+    try stdout.print("num points: {}\n sum:{}\n", .{ parsed[0], parsed[1] });
     try stdout.print("average: {d}\n", .{parsed[1] / num_points_float});
 
     try stdout.flush();
