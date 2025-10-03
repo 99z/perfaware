@@ -14,6 +14,13 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
     });
 
+    const rdtsc_module = b.addModule("rdtsc", .{
+        .root_source_file = b.path("../rdtsc/src/root.zig"),
+    });
+
+    // Add the module to your executable
+    exe.root_module.addImport("rdtsc", rdtsc_module);
+
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).

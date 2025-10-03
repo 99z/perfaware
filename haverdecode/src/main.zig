@@ -1,6 +1,7 @@
 const std = @import("std");
 const json = @import("json.zig");
 const builtin = @import("builtin");
+const timing = @import("rdtsc");
 
 const Point = struct {
     x: f32,
@@ -109,6 +110,8 @@ fn parseResults(node: *json.NXJson) struct { usize, f32 } {
 }
 
 pub fn main() !void {
+    const startup_start = timing.__rdtsc();
+
     var stdout_buffer: [4096]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
@@ -130,15 +133,41 @@ pub fn main() !void {
     const content = try file.readToEndAlloc(allocator, file_size);
     defer allocator.free(content);
 
+    const startup_end = timing.__rdtsc();
+
+    const parse_start = timing.__rdtsc();
+
     var result = try json.parse(allocator, content);
     defer result.arena.deinit();
 
+    const parse_end = timing.__rdtsc();
+
+    const sum_start = timing.__rdtsc();
     // printJsonTree(&result.json, 0);
     const parsed = parseResults(&result.json);
     const num_points_float: f32 = @floatFromInt(parsed[0]);
 
+    const sum_end = timing.__rdtsc();
+
     try stdout.print("num points: {}\n sum:{}\n", .{ parsed[0], parsed[1] });
     try stdout.print("average: {d}\n", .{parsed[1] / num_points_float});
+
+    const full_execution = sum_end - startup_start;
+
+    const startup_duration = startup_end - startup_start;
+    const startup_percentage = @as(f64, @floatFromInt(startup_duration)) / @as(f64, @floatFromInt(full_execution)) * 100.0;
+
+    const parse_duration = parse_end - parse_start;
+    const parse_percentage = @as(f64, @floatFromInt(parse_duration)) / @as(f64, @floatFromInt(full_execution)) * 100.0;
+
+    const sum_duration = sum_end - sum_start;
+    const sum_percentage = @as(f64, @floatFromInt(sum_duration)) / @as(f64, @floatFromInt(full_execution)) * 100.0;
+
+    try stdout.print("\n=== METRICS ===\n", .{});
+    try stdout.print("full execution: {}\n", .{full_execution});
+    try stdout.print("startup: {} ({d:.2}%)\n", .{ startup_duration, startup_percentage });
+    try stdout.print("parse: {} ({d:.2}%)\n", .{ parse_duration, parse_percentage });
+    try stdout.print("sum: {} ({d:.2}%)\n", .{ sum_duration, sum_percentage });
 
     try stdout.flush();
 }
