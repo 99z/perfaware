@@ -14,7 +14,7 @@ pub inline fn __rdtsc() u64 {
 }
 
 pub fn getOSTimerFreq() u64 {
-    return 1000000;
+    return 1000000000;
 }
 
 pub fn readOSTimer() !u64 {
@@ -26,7 +26,7 @@ pub fn readOSTimer() !u64 {
     // these will always be positive
     const sec: u64 = @intCast(ts.sec);
     const nsec: u64 = @intCast(ts.nsec);
-    const result = getOSTimerFreq() * sec + @divFloor(nsec, 1000);
+    const result = getOSTimerFreq() * sec + nsec;
 
     return result;
 }
@@ -52,7 +52,7 @@ pub fn estimateCPUTimerFreq() !u64 {
     const cpu_end = __rdtsc();
     const cpu_elapsed = cpu_end - cpu_start;
     const cpu_freq = if (os_elapsed != 0)
-        os_freq * (cpu_elapsed / os_elapsed)
+        (cpu_elapsed * os_freq) / os_elapsed
     else
         0;
 
