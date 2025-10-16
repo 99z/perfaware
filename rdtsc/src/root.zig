@@ -1,16 +1,30 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub inline fn __rdtsc() u64 {
-    var hi: u64 = 0;
-    var low: u64 = 0;
+    switch (builtin.cpu.arch) {
+        .x86_64 => {
+            var hi: u64 = 0;
+            var low: u64 = 0;
 
-    asm volatile (
-        \\rdtsc
-        : [low] "={eax}" (low),
-          [hi] "={edx}" (hi),
-    );
+            asm volatile (
+                \\rdtsc
+                : [low] "={eax}" (low),
+                  [hi] "={edx}" (hi),
+            );
 
-    return (@as(u64, hi) << 32) | @as(u64, low);
+            return (@as(u64, hi) << 32) | @as(u64, low);
+        },
+        .aarch64 => {
+            var result: u64 = 0;
+            asm volatile (
+                \\mrs %[x], cntvct_el0
+                : [x] "=r" (result),
+            );
+            return result;
+        },
+        else => @compileError("Unsupported architecture for rdtsc timing"),
+    }
 }
 
 pub fn getOSTimerFreq() u64 {
