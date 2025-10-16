@@ -31,26 +31,31 @@ fn generateClusteredPairs(rand: std.Random, num_points: usize, stdout: anytype) 
     const points_per_cluster = num_points / NUM_CLUSTERS;
     var sum: f32 = 0;
 
-    // Pick random point on globe
-    const center_long = unitIntervalToLong(rand.float(f32));
-    const center_lat = unitIntervalToLat(rand.float(f32));
+    // Generate cluster centers distributed across the globe
+    var cluster_centers: [NUM_CLUSTERS]struct { long: f32, lat: f32 } = undefined;
+    for (0..NUM_CLUSTERS) |i| {
+        cluster_centers[i] = .{
+            .long = unitIntervalToLong(rand.float(f32)),
+            .lat = unitIntervalToLat(rand.float(f32)),
+        };
+    }
 
     for (0..NUM_CLUSTERS * points_per_cluster) |i| {
-        const x0 = center_long + (-20 + rand.float(f32) * 40);
-        const x1 = center_long + (-20 + rand.float(f32) * 40);
-        const y0 = center_lat + (-10 + rand.float(f32) * 20);
-        const y1 = center_lat + (-10 + rand.float(f32) * 20);
+        const cluster_index = i / points_per_cluster;
+        const center = cluster_centers[cluster_index];
+        
+        // Generate points within 20 degrees longitude and 10 degrees latitude of cluster center
+        const x0 = center.long + (-20 + rand.float(f32) * 40);
+        const x1 = center.long + (-20 + rand.float(f32) * 40);
+        const y0 = center.lat + (-10 + rand.float(f32) * 20);
+        const y1 = center.lat + (-10 + rand.float(f32) * 20);
 
-        const p1: Point = .{ .x = x0, .y = y0 };
-        const p2: Point = .{ .x = x1, .y = y1 };
-
-        const haversine_pair: HaversinePair = .{ .x0 = p1.x, .y0 = p1.y, .x1 = p2.x, .y1 = p2.y };
+        const haversine_pair: HaversinePair = .{ .x0 = x0, .y0 = y0, .x1 = x1, .y1 = y1 };
 
         const distance = referenceHaversine(haversine_pair.x0, haversine_pair.y0, haversine_pair.x1, haversine_pair.y1, EARTH_RADIUS);
         sum += distance;
 
         try std.json.Stringify.value(haversine_pair, .{ .whitespace = .minified }, stdout);
-        // TODO This might be incorrect
         if (i != num_points - 1) try stdout.print(",", .{});
     }
 
