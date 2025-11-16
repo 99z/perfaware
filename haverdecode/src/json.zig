@@ -1,4 +1,5 @@
 const std = @import("std");
+const prof = @import("profutils");
 // Adapted from nxjson: https://github.com/thestr4ng3r/nxjson
 
 pub const NXJsonType = enum {
@@ -180,6 +181,9 @@ fn parseValue(allocator: std.mem.Allocator, parent: *NXJson, key: []const u8, te
 }
 
 pub fn parse(allocator: std.mem.Allocator, text: []const u8) !struct { json: NXJson, arena: std.heap.ArenaAllocator } {
+    var p = prof.timeFunction(@src().fn_name);
+    defer p.stopProfiling();
+
     var arena = std.heap.ArenaAllocator.init(allocator);
     const arena_allocator = arena.allocator();
 

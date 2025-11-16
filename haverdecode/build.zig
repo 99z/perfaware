@@ -14,12 +14,11 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
     });
 
-    const rdtsc_module = b.addModule("rdtsc", .{
-        .root_source_file = b.path("../rdtsc/src/root.zig"),
+    const profutils_module = b.addModule("profutils", .{
+        .root_source_file = b.path("../profutils/src/root.zig"),
     });
 
-    // Add the module to your executable
-    exe.root_module.addImport("rdtsc", rdtsc_module);
+    exe.root_module.addImport("profutils", profutils_module);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default

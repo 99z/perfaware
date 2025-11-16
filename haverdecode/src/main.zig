@@ -1,7 +1,7 @@
 const std = @import("std");
 const json = @import("json.zig");
 const builtin = @import("builtin");
-const timing = @import("rdtsc");
+const prof = @import("profutils");
 
 const Point = struct {
     x: f32,
@@ -60,7 +60,10 @@ fn printJsonTree(node: *json.NXJson, depth: usize) void {
     }
 }
 
-fn parseResults(node: *json.NXJson) struct { usize, f32 } {
+fn sumResults(node: *json.NXJson) struct { usize, f32 } {
+    var p = prof.timeFunction(@src().fn_name);
+    defer p.stopProfiling();
+
     var sum: f32 = 0;
     var num_points: usize = 0;
 
@@ -110,7 +113,10 @@ fn parseResults(node: *json.NXJson) struct { usize, f32 } {
 }
 
 pub fn main() !void {
-    const startup_start = timing.__rdtsc();
+    prof.beginProfiling();
+    defer prof.deinitProfileRecords();
+
+    var startup_prof = prof.timeFunction("startup");
 
     var stdout_buffer: [4096]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
@@ -120,6 +126,9 @@ pub fn main() !void {
     _ = args.next();
 
     const filename = args.next() orelse return try stdout.print("usage: havercode <filename>\n", .{});
+    startup_prof.stopProfiling();
+
+    var read_prof = prof.timeFunction("read");
     const file = try std.fs.cwd().openFile(filename, .{});
     defer file.close();
 
@@ -133,41 +142,29 @@ pub fn main() !void {
     const content = try file.readToEndAlloc(allocator, file_size);
     defer allocator.free(content);
 
-    const startup_end = timing.__rdtsc();
-
-    const parse_start = timing.__rdtsc();
+    read_prof.stopProfiling();
 
     var result = try json.parse(allocator, content);
     defer result.arena.deinit();
 
-    const parse_end = timing.__rdtsc();
-
-    const sum_start = timing.__rdtsc();
     // printJsonTree(&result.json, 0);
-    const parsed = parseResults(&result.json);
+    const parsed = sumResults(&result.json);
     const num_points_float: f32 = @floatFromInt(parsed[0]);
 
-    const sum_end = timing.__rdtsc();
+    prof.endProfiling();
 
     try stdout.print("num points: {}\n sum:{}\n", .{ parsed[0], parsed[1] });
-    try stdout.print("average: {d}\n", .{parsed[1] / num_points_float});
+    try stdout.print("average: {d}\n\n", .{parsed[1] / num_points_float});
 
-    const full_execution = sum_end - startup_start;
+    const total_execution_time = prof.getTotalExecutionTime();
+    try stdout.print("total time: {d}\n", .{total_execution_time});
 
-    const startup_duration = startup_end - startup_start;
-    const startup_percentage = @as(f64, @floatFromInt(startup_duration)) / @as(f64, @floatFromInt(full_execution)) * 100.0;
+    const profiled_funcs = prof.getProfileRecords();
 
-    const parse_duration = parse_end - parse_start;
-    const parse_percentage = @as(f64, @floatFromInt(parse_duration)) / @as(f64, @floatFromInt(full_execution)) * 100.0;
-
-    const sum_duration = sum_end - sum_start;
-    const sum_percentage = @as(f64, @floatFromInt(sum_duration)) / @as(f64, @floatFromInt(full_execution)) * 100.0;
-
-    try stdout.print("\n=== METRICS ===\n", .{});
-    try stdout.print("full execution: {}\n", .{full_execution});
-    try stdout.print("startup: {} ({d:.2}%)\n", .{ startup_duration, startup_percentage });
-    try stdout.print("parse: {} ({d:.2}%)\n", .{ parse_duration, parse_percentage });
-    try stdout.print("sum: {} ({d:.2}%)\n", .{ sum_duration, sum_percentage });
+    for (profiled_funcs) |func| {
+        const percentage = @as(f64, @floatFromInt(func.duration)) / @as(f64, @floatFromInt(total_execution_time)) * 100.0;
+        try stdout.print("{s: <12}->\t{} ({d:.2}%)\n", .{ func.name, func.duration, percentage });
+    }
 
     try stdout.flush();
 }
