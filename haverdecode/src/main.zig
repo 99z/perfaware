@@ -114,7 +114,6 @@ fn sumResults(node: *json.NXJson) struct { usize, f32 } {
 
 pub fn main() !void {
     prof.beginProfiling();
-    defer prof.deinitProfileRecords();
 
     var startup_prof = prof.timeFunction("startup");
 
@@ -155,16 +154,6 @@ pub fn main() !void {
 
     try stdout.print("num points: {}\n sum:{}\n", .{ parsed[0], parsed[1] });
     try stdout.print("average: {d}\n\n", .{parsed[1] / num_points_float});
-
-    const total_execution_time = prof.getTotalExecutionTime();
-    try stdout.print("total time: {d}\n", .{total_execution_time});
-
-    const profiled_funcs = prof.getProfileRecords();
-
-    for (profiled_funcs) |func| {
-        const percentage = @as(f64, @floatFromInt(func.duration)) / @as(f64, @floatFromInt(total_execution_time)) * 100.0;
-        try stdout.print("{s: <12}->\t{} ({d:.2}%)\n", .{ func.name, func.duration, percentage });
-    }
 
     try stdout.flush();
 }
